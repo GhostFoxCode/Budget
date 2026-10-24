@@ -315,7 +315,7 @@ function gererClicTitreDemo() {
     if (demoUserLocked) {
       msg(`🔒 Mode Démo Activé - Profil figé sur ${usr(U).nom}`);
     } else {
-      msg(`🔓 Mode Démo Désactivé - Verrouillage retiré`);
+      msg(`🔓 Mode Démo Désactivé - Sélecteur libéré`);
     }
     rendre();
   }
@@ -655,7 +655,7 @@ function toggleCheck(id, event) {
   event.stopPropagation();
   const x = ROWS[id];
   if (!x) return;
-  if (!isAdmin && x.u !== U) {
+  if (!isAdmin && !demoUserLocked && x.u !== U) {
     msg("Vous ne pouvez modifier que vos propres opérations.");
     return;
   }
@@ -677,7 +677,7 @@ function ligne(x, s, avecCoche = true){
   const opReal = x.opObj || S.ops.find(o => S.ops.indexOf(o) === +id.slice(1));
   const i = opReal ? S.ops.indexOf(opReal) : -1;
   
-  const peutModifier = isAdmin || x.u === U;
+  const peutModifier = isAdmin || demoUserLocked || x.u === U;
   const del = (x.proj || !peutModifier) ? '' : `<button class="del-btn" onclick="event.stopPropagation();${i>=0?`supprimer(${i})`:`retirer('${id}')`}">✕</button>`;
   const checkboxHtml = (!avecCoche || x.proj) ? '' : `<input type="checkbox" ${x.checked ? 'checked' : ''} ${!peutModifier ? 'disabled' : ''} onclick="toggleCheck('${id}', event)" style="margin-right:8px; cursor:${peutModifier?'pointer':'default'};" title="Décompte solde banque">`;
   
@@ -693,7 +693,7 @@ function ligne(x, s, avecCoche = true){
 function rendre(){
   ROWS = {}; const t = today(); if (!M) M = t.slice(0,7);
   
-  // Affichage dynamique des boutons de sélection de profils (Kévin / Prescillia)
+  // Affichage du sélecteur : En mode normal ou démo activé, on laisse les deux boutons de switch disponibles pour basculer à tout moment. Si verrouillé en mode démo, seul le bouton actif est mis en valeur mais les deux restent cliquables si l'admin le souhaite, ou l'utilisateur garde son choix figé.
   if (isAdmin || demoUserLocked) {
     $('seg').innerHTML = S.users.map(u => `<button class="user-btn ${u.id===U?'active':''}" onclick="U='${u.id}';rendre()">${esc(u.nom)}</button>`).join('');
   } else {
@@ -805,7 +805,7 @@ function detail(){
 
 function supprimerModifExc(ruleIdx, k) {
   const g = S.regles[ruleIdx];
-  if (g && !isAdmin && g.u !== U) {
+  if (g && !isAdmin && !demoUserLocked && g.u !== U) {
     return msg("Non autorisé.");
   }
   if (g && g.exc && g.exc[k]) {
@@ -824,7 +824,7 @@ function supprimerModifExc(ruleIdx, k) {
 function mettreAJourRecurrencesFutures(idx) {
   const g = S.regles[idx];
   if (!g) return;
-  if (!isAdmin && g.u !== U) return msg("Non autorisé.");
+  if (!isAdmin && !demoUserLocked && g.u !== U) return msg("Non autorisé.");
   
   const nouveauMontant = Math.abs(parseFloat($('t-m').value));
   if (isNaN(nouveauMontant)) return msg('Montant invalide.');
@@ -870,7 +870,7 @@ function ouvrir(id){
   ED = id || ''; 
   const x = ED ? ROWS[ED] : null;
 
-  if (x && !isAdmin && x.u !== U) {
+  if (x && !isAdmin && !demoUserLocked && x.u !== U) {
     return msg("Vous ne pouvez éditer que vos propres opérations.");
   }
 
@@ -898,7 +898,7 @@ function enregistrer(){
   
   if (ED) {
     const x = ROWS[ED];
-    if (!isAdmin && x.u !== U) return msg("Modification interdite.");
+    if (!isAdmin && !demoUserLocked && x.u !== U) return msg("Modification interdite.");
     
     const opReal = x.opObj || S.ops.find(o => S.ops.indexOf(o) === +ED.slice(1));
     if (opReal) {
@@ -939,7 +939,7 @@ function enregistrer(){
 }
 
 function supprimer(i){ 
-  if (!isAdmin && S.ops[i] && S.ops[i].u !== U) return msg("Suppression interdite.");
+  if (!isAdmin && !demoUserLocked && S.ops[i] && S.ops[i].u !== U) return msg("Suppression interdite.");
   S.ops.splice(i, 1); 
   sauver(); 
   rendre(); 
@@ -947,7 +947,7 @@ function supprimer(i){
 
 function retirer(id){
   const [rIdx, k] = [ +id.slice(1).split('|')[0], id.slice(1).split('|')[1] ];
-  if (!isAdmin && S.regles[rIdx] && S.regles[rIdx].u !== U) return msg("Action interdite.");
+  if (!isAdmin && !demoUserLocked && S.regles[rIdx] && S.regles[rIdx].u !== U) return msg("Action interdite.");
   S.regles[rIdx].exc = S.regles[rIdx].exc || {};
   S.regles[rIdx].exc[k] = { skip: true };
   sauver(); rendre();
@@ -956,7 +956,7 @@ function retirer(id){
 function ouvrirTpl(idx){
   ET = idx;
   const isNew = idx === -1;
-  if (!isNew && !isAdmin && S.regles[idx] && S.regles[idx].u !== U) {
+  if (!isNew && !isAdmin && !demoUserLocked && S.regles[idx] && S.regles[idx].u !== U) {
     return msg("Vous ne pouvez pas modifier cette référence.");
   }
 
@@ -1003,7 +1003,7 @@ function enregistrerTpl(){
   if (ET === -1) {
     S.regles.push(newData);
   } else {
-    if (!isAdmin && S.regles[ET] && S.regles[ET].u !== U) return msg("Modification interdite.");
+    if (!isAdmin && !demoUserLocked && S.regles[ET] && S.regles[ET].u !== U) return msg("Modification interdite.");
     newData.exc = S.regles[ET].exc || {};
     S.regles[ET] = newData;
   }
@@ -1020,7 +1020,7 @@ function rafraichirRecurrencesTpl(){
 
 function supprimerTpl(){
   if (ET === -1) return;
-  if (!isAdmin && S.regles[ET] && S.regles[ET].u !== U) return msg("Suppression interdite.");
+  if (!isAdmin && !demoUserLocked && S.regles[ET] && S.regles[ET].u !== U) return msg("Suppression interdite.");
   if (confirm("Voulez-vous vraiment supprimer cette référence fixe ?")) {
     S.regles.splice(ET, 1);
     sauver();
