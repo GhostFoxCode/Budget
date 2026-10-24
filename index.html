@@ -393,13 +393,13 @@ function gererSuccesSession(session) {
   $('auth-screen').classList.add('hidden');
   const email = (session.user.email || '').toLowerCase();
   
-  // Si ce n'est pas le compte principal de Kévin, verrouiller le mode mono-utilisateur pour Prescillia
-  if (email.includes('admin') || email.includes('kevin')) {
-    isAdmin = true;
-    U = '2899de9f-a408-419b-aee1-c5f26980f2b4';
-  } else {
+  // Reconnaît l'ancien ou le nouvel email de Prescillia pour verrouiller le compte standard
+  if (email.includes('presci') || email.includes('prescillia')) {
     isAdmin = false;
-    U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
+    U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0'; // ID de Prescillia
+  } else {
+    isAdmin = true;
+    U = '2899de9f-a408-419b-aee1-c5f26980f2b4'; // ID de Kévin (Admin)
   }
   chargerCloud();
 }
