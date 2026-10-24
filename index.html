@@ -212,7 +212,7 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
   <label>Mois de début (AAAA-MM)<input type="text" id="t-deb" placeholder="Ex: 2026-01"></label>
   <label>Date de fin (optionnel)<input type="date" id="t-f"></label>
   <button class="btn-primary" onclick="enregistrerTpl()">Sauvegarder</button>
-  <button class="btn-primary btn-ghost" id="t-refresh-btn" onclick="rafraichirRecurrencesTpl()" style="display:none;background:var(--warning);color:#000;margin-top:4px">🔄 Actualiser les récurrences futures</button>
+  <button class="btn-primary btn-ghost" id="t-refresh-btn" onclick="rafraichirRecurrencesTpl()" style="display:none;background:var(--warning);color:#000;margin-top:4px">🔄 Actualiser les récurrences futures (M+1)</button>
   <button class="btn-primary btn-ghost" id="t-del-btn" onclick="supprimerTpl()" style="display:none;color:var(--red);margin-top:4px">Supprimer cette référence</button>
  </div>
 </div></div>
@@ -680,8 +680,27 @@ function detail(){
   $('regles').innerHTML = S.regles.map((g, i) => {
     if (g.u !== U) return '';
     const mClass = g.m < 0 ? 'red' : 'green';
+    
+    let modificationsHtml = '';
+    if (g.exc) {
+      const itemsModif = [];
+      Object.keys(g.exc).forEach(k => {
+        const ex = g.exc[k];
+        if (ex && (ex.m !== undefined || ex.d !== undefined || ex.l !== undefined)) {
+          itemsModif.push(`<span style="display:inline-flex; align-items:center; gap:4px; background:rgba(255,255,255,0.06); padding:2px 6px; border-radius:6px; margin:2px 4px 2px 0;">Le ${k}: ${ex.m !== undefined ? eur(ex.m) : ''} <span onclick="event.stopPropagation(); supprimerModifExc(${i}, '${k}')" style="cursor:pointer; color:var(--red); font-weight:bold; margin-left:2px;" title="Supprimer cette modification">✕</span></span>`);
+        }
+      });
+      if (itemsModif.length > 0) {
+        modificationsHtml = `<div style="font-size:0.7rem; color:var(--text-muted); margin-top:4px;">Modifications : ${itemsModif.join('')}</div>`;
+      }
+    }
+
     return `<div class="op-item" onclick="ouvrirTpl(${i})">
-      <div class="op-info"><div class="op-label">${esc(g.l)} ${g.c?'🤝':''}</div><div class="op-sub">Chaque mois le ${g.jour || 1}</div></div>
+      <div class="op-info">
+        <div class="op-label">${esc(g.l)} ${g.c?'🤝':''}</div>
+        <div class="op-sub">Chaque mois le ${g.jour || 1}</div>
+        ${modificationsHtml}
+      </div>
       <div class="op-right">
         <div class="op-amount ${mClass}">${eur(g.m)}</div>
       </div>
@@ -689,10 +708,25 @@ function detail(){
   }).join('') || '<p class="mu" style="text-align:center">Aucune référence.</p>';
 }
 
+function supprimerModifExc(ruleIdx, k) {
+  const g = S.regles[ruleIdx];
+  if (g && g.exc && g.exc[k]) {
+    delete g.exc[k].m;
+    delete g.exc[k].d;
+    delete g.exc[k].l;
+    if (Object.keys(g.exc[k]).length === 0) {
+      delete g.exc[k];
+    }
+    sauver();
+    rendre();
+    msg("Modification supprimée pour ce mois.");
+  }
+}
+
 function mettreAJourRecurrencesFutures(idx) {
   const g = S.regles[idx];
   if (!g) return;
-  const nouveauMontantStr = prompt(`Modifier le montant de référence pour "${g.l}" (les mois futurs à partir du mois prochain seront mis à jour) :`, Math.abs(g.m));
+  const nouveauMontantStr = prompt(`Modifier le montant de référence pour "${g.l}" (la synchronisation se fera à partir de M+1, le mois en cours ne sera pas touché) :`, Math.abs(g.m));
   if (nouveauMontantStr === null) return;
   const val = parseFloat(nouveauMontantStr.replace(',', '.'));
   if (isNaN(val)) return msg('Montant invalide.');
@@ -715,7 +749,7 @@ function mettreAJourRecurrencesFutures(idx) {
 
   sauver();
   rendre();
-  msg('Récurrences futures mises à jour avec succès (le mois en cours a été préservé) !');
+  msg('Récurrences futures mises à jour à partir de M+1 (le mois en cours a été préservé) !');
 }
 
 function supprimerTplDirect(idx) {
@@ -751,10 +785,22 @@ function basculerRecurrenceModal(estCoche) {
 }
 
 function ouvrir(id){
-  ED = id || ''; const x = ED ? ROWS[ED] : null;
+  ED = id || ''; 
+  const x = ED ? ROWS[ED] : null;
+  
+  if (x && x.g) {
+    const regleIdx = S.regles.indexOf(x.g);
+    if (regleIdx !== -1) {
+      ouvrirTpl(regleIdx);
+      return;
+    }
+  }
+
   $('m-t').textContent = x ? 'Modifier' : 'Nouvelle opération';
-  $('f-l').value = x ? x.l : ''; $('f-m').value = x ? Math.abs(x.m) : '';
-  $('f-t').value = x && x.m > 0 ? '1' : '-1'; $('f-c').value = x && x.c ? '1' : '0';
+  $('f-l').value = x ? x.l : ''; 
+  $('f-m').value = x ? Math.abs(x.m) : '';
+  $('f-t').value = x && x.m > 0 ? '1' : '-1'; 
+  $('f-c').value = x && x.c ? '1' : '0';
   $('f-d').value = x ? x.d : today(); 
   
   $('f-rbox').classList.toggle('hidden', !!ED);
@@ -780,6 +826,15 @@ function enregistrer(){
       opReal.m = sg * v;
       opReal.d = d;
       opReal.c = c;
+    } else if (x.g) {
+      const g = x.g;
+      const k = x.k;
+      g.exc = g.exc || {};
+      g.exc[k] = g.exc[k] || {};
+      g.exc[k].l = l;
+      g.exc[k].m = sg * v;
+      g.exc[k].d = d;
+      g.exc[k].c = c;
     }
   } else {
     if (estRecurrent) {
