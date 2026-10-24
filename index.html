@@ -372,35 +372,30 @@ async function verifierSession() {
 }
 
 function verifierSessionLocale() {
-  let hasSupabaseSession = false;
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key && (key.startsWith('sb-') || key.includes('supabase')) && key.endsWith('-auth-token')) {
-      hasSupabaseSession = true;
-      break;
-    }
-  }
-  
-  if (hasSupabaseSession) {
-    $('auth-screen').classList.add('hidden');
-    rendre();
-  } else {
-    $('auth-screen').classList.remove('hidden');
-  }
+  // Exige une authentification valide Supabase (empêche la connexion fantôme hors ligne)
+  $('auth-screen').classList.remove('hidden');
 }
 
 function gererSuccesSession(session) {
   $('auth-screen').classList.add('hidden');
-  const email = (session.user.email || '').toLowerCase();
+  const email = (session.user.email || '').toLowerCase().trim();
   
-  // Reconnaît l'ancien ou le nouvel email de Prescillia pour verrouiller le compte standard
-  if (email.includes('presci') || email.includes('prescillia')) {
-    isAdmin = false;
-    U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0'; // ID de Prescillia
-  } else {
+  // 1. Compte administrateur (Kévin avec 10 clics pour basculer les utilisateurs)
+  if (email === 'admin@budget.local' || email.includes('admin') || email.includes('kevin')) {
     isAdmin = true;
-    U = '2899de9f-a408-419b-aee1-c5f26980f2b4'; // ID de Kévin (Admin)
+    U = '2899de9f-a408-419b-aee1-c5f26980f2b4'; // Compte Kévin par défaut
+  } 
+  // 2. Compte Prescillia (Seulement son utilisateur visible, pas de bascule possible)
+  else if (email === 'prescillia@budget.local' || email.includes('presci')) {
+    isAdmin = false;
+    U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0'; // Compte Prescillia
+  } 
+  // Sécurité par défaut
+  else {
+    isAdmin = false;
+    U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
   }
+  
   chargerCloud();
 }
 
