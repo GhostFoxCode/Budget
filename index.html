@@ -94,7 +94,7 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
     <div class="login-title">Mes Comptes</div>
     <div class="fm">
       <label>Email de connexion
-        <input type="email" id="auth-email" placeholder="admin">
+        <input type="email" id="auth-email" placeholder="email@exemple.com">
       </label>
       <label>Mot de passe
         <input type="password" id="auth-pass" placeholder="••••••••">
@@ -296,14 +296,14 @@ function msg(t){
 }
 
 function gererClicUserSelector() {
+  if (!isAdmin) return;
   clickCount++;
   clearTimeout(clickTimer);
   clickTimer = setTimeout(() => { clickCount = 0; }, 2000);
   
   if (clickCount >= 10) {
     clickCount = 0;
-    isAdmin = !isAdmin;
-    msg(isAdmin ? "Mode Admin activé (Multi-user)" : "Mode Admin désactivé");
+    msg("Mode d'affichage basculé");
     rendre();
   }
 }
@@ -383,8 +383,6 @@ function verifierSessionLocale() {
   
   if (hasSupabaseSession) {
     $('auth-screen').classList.add('hidden');
-    isAdmin = true;
-    U = '2899de9f-a408-419b-aee1-c5f26980f2b4';
     rendre();
   } else {
     $('auth-screen').classList.remove('hidden');
@@ -393,7 +391,9 @@ function verifierSessionLocale() {
 
 function gererSuccesSession(session) {
   $('auth-screen').classList.add('hidden');
-  const email = session.user.email;
+  const email = (session.user.email || '').toLowerCase();
+  
+  // Si ce n'est pas le compte principal de Kévin, verrouiller le mode mono-utilisateur pour Prescillia
   if (email.includes('admin') || email.includes('kevin')) {
     isAdmin = true;
     U = '2899de9f-a408-419b-aee1-c5f26980f2b4';
@@ -677,8 +677,9 @@ function rendre(){
   if (isAdmin) {
     $('seg').innerHTML = S.users.map(u => `<button class="user-btn ${u.id===U?'active':''}" onclick="U='${u.id}';rendre()">${esc(u.nom)}</button>`).join('');
   } else {
+    U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
     const activeUser = usr(U);
-    $('seg').innerHTML = `<button class="user-btn active">${esc(activeUser.nom)}</button>`;
+    $('seg').innerHTML = `<button class="user-btn active" style="cursor:default">${esc(activeUser.nom)}</button>`;
   }
   
   for (const v of ['synth','detail','options']){
@@ -1042,7 +1043,7 @@ function importerJSON(txt){
 
   if (Array.isArray(users) && Array.isArray(ops) && Array.isArray(regles)){
     S = { users, ops, regles };
-    U = S.users[0] ? S.users[0].id : '2899de9f-a408-419b-aee1-c5f26980f2b4';
+    U = isAdmin ? (S.users[0] ? S.users[0].id : '2899de9f-a408-419b-aee1-c5f26980f2b4') : 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
     sauver();
     rendre();
     return msg('Sauvegarde JSON restaurée et synchronisée avec succès !');
