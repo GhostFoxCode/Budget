@@ -309,7 +309,8 @@ function gererClicUserSelector() {
   
   if (clickCount >= 10) {
     clickCount = 0;
-    msg("Mode d'affichage basculé");
+    U = (U === S.users[0].id) ? S.users[1].id : S.users[0].id;
+    msg(`Vue basculée sur ${usr(U).nom}`);
     rendre();
   }
 }
@@ -627,7 +628,6 @@ function mini(uid, ym){
   for (let j = new Date(y, m-1, 1); j <= fin; j.setDate(j.getDate()+1)){
     const dateJour = iso(j);
     const opsDuJour = mv.filter(x => x.d === dateJour);
-    // Traiter les crédits (+m) AVANT les débits (-m) pour ne pas fausser le solde mini le même jour
     opsDuJour.sort((a, b) => b.m - a.m);
     
     for (const op of opsDuJour) {
@@ -746,7 +746,6 @@ function detail(){
   const tous = mouvementsTheoriques(U, M+'-31'), avant = usr(U).init + somme(tous.filter(x => x.d < M+'-01'));
   let s = avant;
   
-  // Tri chronologique : d'abord par date, puis les crédits (+m) avant les débits (-m)
   const lignes = tous.filter(x => x.d.startsWith(M))
     .sort((a, b) => a.d.localeCompare(b.d) || b.m - a.m)
     .map(x => { s += x.m; return {x, s}; });
