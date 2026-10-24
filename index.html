@@ -93,7 +93,7 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
     <div class="login-title">Mes Comptes</div>
     <div class="fm">
       <label>Email de connexion
-        <input type="email" id="auth-email" placeholder="admin@budget.local ou prescillia@budget.local">
+        <input type="email" id="auth-email" placeholder="admin">
       </label>
       <label>Mot de passe
         <input type="password" id="auth-pass" placeholder="••••••••">
@@ -621,20 +621,30 @@ function rendre(){
   if (activeUser){ $('p-n').value = activeUser.nom; $('p-i').value = activeUser.init; }
 }
 
+function formaterDateFr(dateIso) {
+  const [y, m, d] = dateIso.split('-');
+  return `${d}/${m}/${y.slice(-2)}`;
+}
+
 function synthese(t){
-  const [y, m] = t.split('-').map(Number), suiv = iso(new Date(y, m, 1)).slice(0,7);
+  const [y, m] = t.split('-').map(Number);
+  const dateSuivObj = new Date(y, m, 1);
+  const suiv = iso(dateSuivObj).slice(0,7);
+
+  const moisEnCoursNom = new Date(y, m - 1, 1).toLocaleString('fr-FR', { month: 'long' });
+  const moisSuivantNom = dateSuivObj.toLocaleString('fr-FR', { month: 'long' });
+
   const box = (n, v) => `<div class="metric-box"><div class="metric-label">${n}</div><div class="metric-val ${v<0?'red':'green'}">${eur(v)}</div></div>`;
   
-  // Les 3 soldes demandés : Solde actuel (Banque), Solde théorique, Fin de mois estimé
   $('apercu').innerHTML = box('Solde actuel (Banque)', soldeActuelBanque(U, t)) + 
                           box('Solde théorique', soldeTheoriqueActuel(U, t)) + 
                           box('Fin de mois estimé', soldeTheoriqueFinMois(U, iso(new Date(y, m, 0))));
   
   const prev = (n, r) => `<div class="metric-box"><div class="metric-label" style="font-weight:700;color:var(--text)">${n}</div>
-    <div class="mu" style="margin-top:4px">Mini : <span class="${r.s<0?'red':''}" style="color:var(--text)">${eur(r.s)}</span></div></div>`;
-  $('prev').innerHTML = prev('Mois en cours', mini(U, t.slice(0,7))) + prev('Mois suivant', mini(U, suiv));
+    <div class="mu" style="margin-top:4px">Mini : <span class="${r.s<0?'red':''}" style="color:var(--text)">${eur(r.s)}</span> (${formaterDateFr(r.d)})</div></div>`;
   
-  // Dernières opérations sans la case à cocher (avecCoche = false)
+  $('prev').innerHTML = prev(`Mois en cours (${moisEnCoursNom})`, mini(U, t.slice(0,7))) + prev(`Mois suivant (${moisSuivantNom})`, mini(U, suiv));
+  
   $('dern').innerHTML = mouvementsTheoriques(U, t).sort((a, b) => b.d.localeCompare(a.d)).slice(0, 10).map(x => ligne(x, undefined, false)).join('') || '<p class="mu" style="text-align:center">Aucune opération</p>';
   
   const reg = S.ops.find(o => o.reg === M), b = $('eqBadge');
@@ -651,7 +661,6 @@ function detail(){
   const ok = o => (o.x.m < 0 ? F.deb : F.cre) && (o.x.g ? F.men : F.pon) && (F.com || !o.x.c);
   $('detailEq').classList.toggle('hidden', !F.eq); $('detailEqText').textContent = commun(M).txt;
   
-  // Dans détail, on conserve la case à cocher (avecCoche = true)
   $('d-list').innerHTML = lignes.filter(ok).reverse().map(o => ligne(o.x, F.roll ? o.s : undefined, true)).join('') || '<p class="mu" style="text-align:center">Aucune opération</p>';
   
   $('regles').innerHTML = S.regles.map((g, i) => g.u !== U ? '' : `<div class="op-item" onclick="ouvrirTpl(${i})">
@@ -690,7 +699,6 @@ function ouvrir(id){
   $('f-t').value = x && x.m > 0 ? '1' : '-1'; $('f-c').value = x && x.c ? '1' : '0';
   $('f-d').value = x ? x.d : today(); 
   
-  // Masquer la case récurrence en édition, l'afficher en création
   $('f-rbox').classList.toggle('hidden', !!ED);
   $('f-r').checked = false;
   $('f-fin').value = '';
@@ -717,7 +725,6 @@ function enregistrer(){
     }
   } else {
     if (estRecurrent) {
-      // Création sous forme de règle récurrente (référence fixe) avec date de fin optionnelle
       const jourDuMois = parseInt(d.slice(8)) || 1;
       const moisDebut = d.slice(0,7);
       S.regles.push({
