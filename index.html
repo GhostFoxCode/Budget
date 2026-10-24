@@ -653,13 +653,13 @@ function synthese(t){
     const valClass = r.s < 0 ? 'red' : 'green';
     return `<div class="metric-box" style="padding:12px 10px;">
       <div class="metric-label" style="font-weight:700;color:var(--text);font-size:.72rem;">${titreMois} <span style="color:var(--text-muted);font-weight:500;">(${nomMois})</span></div>
-      <div style="margin-top:6px;font-size:.82rem;color:var(--text-muted);">Mini : <span class="${valClass}" style="font-weight:800;color:#fff;">${eur(r.s)}</span> <span style="color:var(--text-muted);">(${formaterDateFr(r.d)})</span></div>
+      <div style="margin-top:6px;font-size:.82rem;color:#fff;"><span style="color:#fff;">Mini :</span> <span class="${valClass}" style="font-weight:800;">${eur(r.s)}</span> <span style="color:var(--text-muted);">(${formaterDateFr(r.d)})</span></div>
     </div>`;
   };
   
   $('prev').innerHTML = prev('Mois en cours', moisEnCoursNom, mini(U, t.slice(0,7))) + prev('Mois suivant', moisSuivantNom, mini(U, suiv));
   
-  $('dern').innerHTML = mouvementsTheoriques(U, t).sort((a, b) => b.d.localeCompare(b.d)).slice(0, 10).map(x => ligne(x, undefined, false)).join('') || '<p class="mu" style="text-align:center">Aucune opération</p>';
+  $('dern').innerHTML = mouvementsTheoriques(U, t).sort((a, b) => b.d.localeCompare(a.d)).slice(0, 10).map(x => ligne(x, undefined, false)).join('') || '<p class="mu" style="text-align:center">Aucune opération</p>';
   
   const reg = S.ops.find(o => o.reg === M), b = $('eqBadge');
   b.textContent = reg ? 'Validé' : 'Détails / Règlement'; b.className = 'badge ' + (reg ? 'badge-success' : 'badge-warning');
@@ -696,7 +696,7 @@ function detail(){
         }
       });
       if (itemsModif.length > 0) {
-        modificationsHtml = `<div style="font-size:0.7rem; color:var(--text-muted); margin-top:4px;">${itemsModif.join('')}</div>`;
+        modificationsHtml = `<div style="font-size:0.7rem; color:var(--text-muted); margin-top:2px;">${itemsModif.join('')}</div>`;
       }
     }
 
