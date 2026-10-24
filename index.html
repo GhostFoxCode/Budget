@@ -368,11 +368,11 @@ function gererSuccesSession(session) {
   const email = (session.user.email || '').toLowerCase().trim();
   
   if (email === 'admin@budget.local') {
-    isAdmin = true;
+    isAdmin = true; // Kévin a les droits admin
     U = '2899de9f-a408-419b-aee1-c5f26980f2b4';
     chargerCloud();
   } else if (email === 'prescillia@budget.local') {
-    isAdmin = false;
+    isAdmin = false; // Prescillia est limitée à son seul profil
     U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
     chargerCloud();
   } else {
@@ -615,6 +615,11 @@ function toggleCheck(id, event) {
   event.stopPropagation();
   const x = ROWS[id];
   if (!x) return;
+  // Vérification de droit si non-admin
+  if (!isAdmin && x.u !== U) {
+    msg("Vous ne pouvez modifier que vos propres opérations.");
+    return;
+  }
   const opReal = x.opObj || S.ops.find(o => S.ops.indexOf(o) === +id.slice(1));
   
   if (opReal) {
@@ -633,10 +638,12 @@ function ligne(x, s, avecCoche = true){
   const opReal = x.opObj || S.ops.find(o => S.ops.indexOf(o) === +id.slice(1));
   const i = opReal ? S.ops.indexOf(opReal) : -1;
   
-  const del = x.proj ? '' : `<button class="del-btn" onclick="event.stopPropagation();${i>=0?`supprimer(${i})`:`retirer('${id}')`}">✕</button>`;
-  const checkboxHtml = (!avecCoche || x.proj) ? '' : `<input type="checkbox" ${x.checked ? 'checked' : ''} onclick="toggleCheck('${id}', event)" style="margin-right:8px; cursor:pointer;" title="Décompte solde banque">`;
+  // Droit de suppression : Admin (Kévin) peut TOUT supprimer, Prescillia ne peut supprimer QUE ses opérations
+  const peutModifier = isAdmin || x.u === U;
+  const del = (x.proj || !peutModifier) ? '' : `<button class="del-btn" onclick="event.stopPropagation();${i>=0?`supprimer(${i})`:`retirer('${id}')`}">✕</button>`;
+  const checkboxHtml = (!avecCoche || x.proj) ? '' : `<input type="checkbox" ${x.checked ? 'checked' : ''} ${!peutModifier ? 'disabled' : ''} onclick="toggleCheck('${id}', event)" style="margin-right:8px; cursor:${peutModifier?'pointer':'default'};" title="Décompte solde banque">`;
   
-  return `<div class="op-item ${x.d===t?'today-op':''}" style="${x.d>t?'opacity:.7':''}" onclick="${x.proj?`ouvrirReg('${x.k}')`:`ouvrir('${id}')`}">
+  return `<div class="op-item ${x.d===t?'today-op':''}" style="${x.d>t?'opacity:.7':''}" onclick="${peutModifier ? (x.proj ? `ouvrirReg('${x.k}')` : `ouvrir('${id}')`) : `msg('Action non autorisée sur ce compte')`}">
    <div class="op-info">
     <div class="op-label">${checkboxHtml}${esc(x.l)} ${x.g?'🔄':''} ${x.c?'🤝':''} ${x.proj?'👩‍❤️‍👨':''}</div>
     <div class="op-sub">${fd(x.d)}${s===undefined?'':' · solde '+eur(s)}</div>
@@ -714,7 +721,7 @@ function detail(){
   
   const reglesTriable = S.regles
     .map((g, origIndex) => ({ g, origIndex }))
-    .filter(item => item.g.u === U)
+    .filter(item => isAdmin || item.g.u === U)
     .sort((a, b) => (a.g.jour || 1) - (b.g.jour || 1));
 
   $('regles').innerHTML = reglesTriable.map(({ g, origIndex }) => {
@@ -749,6 +756,9 @@ function detail(){
 
 function supprimerModifExc(ruleIdx, k) {
   const g = S.regles[ruleIdx];
+  if (g && !isAdmin && g.u !== U) {
+    return msg("Non autorisé.");
+  }
   if (g && g.exc && g.exc[k]) {
     delete g.exc[k].m;
     delete g.exc[k].d;
@@ -765,6 +775,8 @@ function supprimerModifExc(ruleIdx, k) {
 function mettreAJourRecurrencesFutures(idx) {
   const g = S.regles[idx];
   if (!g) return;
+  if (!isAdmin && g.u !== U) return msg("Non autorisé.");
+  
   const nouveauMontantStr = prompt(`Modifier le montant de référence pour "${g.l}" (la mise à jour s'appliquera à partir de M+1) :`, Math.abs(g.m));
   if (nouveauMontantStr === null) return;
   const val = parseFloat(nouveauMontantStr.replace(',', '.'));
@@ -776,15 +788,6 @@ function mettreAJourRecurrencesFutures(idx) {
   sauver();
   rendre();
   msg("Référence mise à jour. Les mois futurs (à partir de M+1) utiliseront ce nouveau montant.");
-}
-
-function supprimerTplDirect(idx) {
-  if (confirm("Voulez-vous vraiment supprimer cette référence fixe ?")) {
-    S.regles.splice(idx, 1);
-    sauver();
-    rendre();
-    msg('Référence fixe supprimée.');
-  }
 }
 
 function decaler(n){
@@ -814,6 +817,10 @@ function ouvrir(id){
   ED = id || ''; 
   const x = ED ? ROWS[ED] : null;
 
+  if (x && !isAdmin && x.u !== U) {
+    return msg("Vous ne pouvez éditer que vos propres opérations.");
+  }
+
   $('m-t').textContent = x ? (x.g ? 'Modifier l\'occurrence de ce mois' : 'Modifier') : 'Nouvelle opération';
   $('f-l').value = x ? x.l : ''; 
   $('f-m').value = x ? Math.abs(x.m) : '';
@@ -838,6 +845,8 @@ function enregistrer(){
   
   if (ED) {
     const x = ROWS[ED];
+    if (!isAdmin && x.u !== U) return msg("Modification interdite.");
+    
     const opReal = x.opObj || S.ops.find(o => S.ops.indexOf(o) === +ED.slice(1));
     if (opReal) {
       opReal.l = l;
@@ -876,9 +885,16 @@ function enregistrer(){
   sauver(); fermer('m-op'); rendre();
 }
 
-function supprimer(i){ S.ops.splice(i, 1); sauver(); rendre(); }
+function supprimer(i){ 
+  if (!isAdmin && S.ops[i] && S.ops[i].u !== U) return msg("Suppression interdite.");
+  S.ops.splice(i, 1); 
+  sauver(); 
+  rendre(); 
+}
+
 function retirer(id){
   const [rIdx, k] = [ +id.slice(1).split('|')[0], id.slice(1).split('|')[1] ];
+  if (!isAdmin && S.regles[rIdx] && S.regles[rIdx].u !== U) return msg("Action interdite.");
   S.regles[rIdx].exc = S.regles[rIdx].exc || {};
   S.regles[rIdx].exc[k] = { skip: true };
   sauver(); rendre();
@@ -887,6 +903,10 @@ function retirer(id){
 function ouvrirTpl(idx){
   ET = idx;
   const isNew = idx === -1;
+  if (!isNew && !isAdmin && S.regles[idx] && S.regles[idx].u !== U) {
+    return msg("Vous ne pouvez pas modifier cette référence.");
+  }
+
   $('t-t').textContent = isNew ? 'Ajouter une référence fixe' : 'Modifier la référence fixe';
   
   if (!isNew) {
@@ -930,6 +950,7 @@ function enregistrerTpl(){
   if (ET === -1) {
     S.regles.push(newData);
   } else {
+    if (!isAdmin && S.regles[ET] && S.regles[ET].u !== U) return msg("Modification interdite.");
     newData.exc = S.regles[ET].exc || {};
     S.regles[ET] = newData;
   }
@@ -948,6 +969,7 @@ function rafraichirRecurrencesTpl(){
 
 function supprimerTpl(){
   if (ET === -1) return;
+  if (!isAdmin && S.regles[ET] && S.regles[ET].u !== U) return msg("Suppression interdite.");
   if (confirm("Voulez-vous vraiment supprimer cette référence fixe ?")) {
     S.regles.splice(ET, 1);
     sauver();
