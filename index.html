@@ -196,9 +196,13 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
   <label>Montant de référence (€)<input type="number" step="0.01" id="t-m"></label>
   <label>Type<select id="t-t2"><option value="-1">Débit</option><option value="1">Crédit</option></select></label>
   <label>Répartition<select id="t-c"><option value="0">Personnel</option><option value="1">Charge commune</option></select></label>
-  <label>Date / Jour du mois<input type="date" id="t-j"></label>
+  <label>Jour du mois (1-31)<input type="number" min="1" max="31" id="t-j" placeholder="Ex: 5"></label>
+  <label>Mois de début (AAAA-MM)<input type="text" id="t-deb" placeholder="Ex: 2026-01"></label>
   <label>Date de fin (optionnel)<input type="date" id="t-f"></label>
-  <button class="btn-primary" onclick="enregistrerTpl()">Sauvegarder</button></div>
+  <button class="btn-primary" onclick="enregistrerTpl()">Sauvegarder</button>
+  <button class="btn-primary btn-ghost" id="t-refresh-btn" onclick="rafraichirRecurrencesTpl()" style="display:none;background:var(--warning);color:#000;margin-top:4px">🔄 Actualiser les récurrences futures</button>
+  <button class="btn-primary btn-ghost" id="t-del-btn" onclick="supprimerTpl()" style="display:none;color:var(--red);margin-top:4px">Supprimer cette référence</button>
+ </div>
 </div></div>
 
 <!-- MODAL RÈGLEMENT -->
@@ -239,7 +243,6 @@ const eur = n => n.toLocaleString('fr-FR',{style:'currency',currency:'EUR'});
 const esc = s => String(s).replace(/[&<>"]/g, c => '&#'+c.charCodeAt(0)+';');
 const fd = d => d.slice(8)+'-'+d.slice(5,7)+'-'+d.slice(0,4);
 
-// Sécurisation de l'utilisateur actif pour éviter les erreurs "undefined (reading 'init')"
 const usr = id => {
   let u = S.users.find(u => u.id === id);
   if (!u && S.users.length > 0) {
@@ -263,7 +266,6 @@ function msg(t){
   msg.h = setTimeout(() => e.style.display = 'none', 4500);
 }
 
-// --- DÉBLOCAGE ADMIN (10 CLICS SUR LE SÉLECTEUR D'UTILISATEUR) ---
 function gererClicUserSelector() {
   clickCount++;
   clearTimeout(clickTimer);
@@ -277,7 +279,6 @@ function gererClicUserSelector() {
   }
 }
 
-// --- GESTION DU STATUT RÉSEAU INTELLIGENTE ---
 async function verifierConnexionReelle() {
   const banner = $('net-status');
   if (!banner) return;
@@ -315,7 +316,6 @@ window.addEventListener('offline', () => {
   }
 });
 
-// --- AUTHENTIFICATION ---
 async function verifierSession() {
   const localBackup = localStorage.getItem('mon_budget_local_data');
   if (localBackup) { 
@@ -359,7 +359,6 @@ async function seDeconnecter() {
   location.reload();
 }
 
-// --- BOUTON DE RÉINITIALISATION (RAZ) ---
 function reinitialiserApplication() {
   if (confirm("Voulez-vous vraiment tout effacer et remettre l'application à zéro ?")) {
     localStorage.clear();
@@ -369,7 +368,6 @@ function reinitialiserApplication() {
   }
 }
 
-// --- CLOUD & SYNCHRO AUTOMATIQUE ---
 async function chargerCloud(silencieux = false){
   if (navigator.onLine) {
     try {
@@ -408,7 +406,6 @@ async function chargerCloud(silencieux = false){
 
 async function sauver(){
   localStorage.setItem('mon_budget_local_data', JSON.stringify(S));
-  
   if (navigator.onLine) {
     await sauverCloudForce();
   }
@@ -467,13 +464,13 @@ window.addEventListener('focus', () => {
   verifierSession();
 });
 
-// --- LOGIQUE MÉTIER ---
-function brut(uid, hingga){
-  const r = S.ops.filter(o => o.u === uid && o.d <= hingga);
+function brut(uid, hingga, seulementValide = false){
+  const r = S.ops.filter(o => o.u === uid && o.d <= hingga && (!seulementValide || o.c));
   for (const g of S.regles.filter(g => g.u === uid)){
+    if (!g.debut) g.debut = '2026-01-01';
     const [y, m0] = g.debut.split('-').map(Number);
     for (let m = m0 - 1; ; m++){
-      const d = safeDateIso(y, m, g.jour);
+      const d = safeDateIso(y, m, g.jour || 1);
       if (iso(new Date(y, m - 1, 1)) > hingga || (g.fin && d > g.fin)) break;
       if (d < g.debut) continue;
       const k = d.slice(0,7), e = g.exc && g.exc[k];
@@ -482,6 +479,7 @@ function brut(uid, hingga){
       const mm = e && e.m !== undefined ? e.m : g.m;
       const ll = e && e.l !== undefined ? e.l : g.l;
       const cc = e && e.c !== undefined ? e.c : g.c;
+      if (seulementValide && !cc) continue;
       if (dd <= hingga) r.push({u:uid, d:dd, l:ll, m:mm, c:cc, g, k});
     }
   }
@@ -496,7 +494,8 @@ function commun(ym){
   return {p, tot, e, txt};
 }
 
-function projections(uid, hingga){
+function projections(uid, hingga, seulementValide = false){
+  if (seulementValide) return []; // Les projections de charges sont théoriques
   const n = new Date(), r = [];
   for (let i = 1; i <= 2; i++){
     const ym = iso(new Date(n.getFullYear(), n.getMonth()+i, 1)).slice(0,7), d = ym+'-12';
@@ -509,12 +508,18 @@ function projections(uid, hingga){
   return r;
 }
 
-const mouvements = (uid, j) => brut(uid, j).concat(projections(uid, j));
-const solde = (uid, date) => usr(uid).init + somme(mouvements(uid, date));
+// Mouvements réels validés (pour la banque / solde actuel)
+const mouvementsBanque = (uid, j) => brut(uid, j, true);
+
+// Mouvements complets théoriques (pour la fin de mois estimée)
+const mouvementsTheoriques = (uid, j) => brut(uid, j, false).concat(projections(uid, j, false));
+
+const soldeActuelBanque = (uid, date) => usr(uid).init + somme(mouvementsBanque(uid, date));
+const soldeTheoriqueFinMois = (uid, date) => usr(uid).init + somme(mouvementsTheoriques(uid, date));
 
 function mini(uid, ym){
   const [y, m] = ym.split('-').map(Number), deb = iso(new Date(y, m-1, 1)), fin = new Date(y, m, 0);
-  const mv = mouvements(uid, iso(fin));
+  const mv = mouvementsTheoriques(uid, iso(fin));
   let s = usr(uid).init + somme(mv.filter(x => x.d < deb)), r = {s, d:deb};
   for (let j = new Date(y, m-1, 1); j <= fin; j.setDate(j.getDate()+1)){
     s += somme(mv.filter(x => x.d === iso(j)));
@@ -578,11 +583,15 @@ function rendre(){
 function synthese(t){
   const [y, m] = t.split('-').map(Number), suiv = iso(new Date(y, m, 1)).slice(0,7);
   const box = (n, v) => `<div class="metric-box"><div class="metric-label">${n}</div><div class="metric-val ${v<0?'red':'green'}">${eur(v)}</div></div>`;
-  $('apercu').innerHTML = box('Solde actuel', solde(U, t)) + box('Fin de mois estimé', solde(U, iso(new Date(y, m, 0))));
+  
+  // Solde actuel = Banque (uniquement les opérations pointées/validées)
+  // Fin de mois estimé = Théorique complet (validées + en attente)
+  $('apercu').innerHTML = box('Solde actuel', soldeActuelBanque(U, t)) + box('Fin de mois estimé', soldeTheoriqueFinMois(U, iso(new Date(y, m, 0))));
+  
   const prev = (n, r) => `<div class="metric-box"><div class="metric-label" style="font-weight:700;color:var(--text)">${n}</div>
     <div class="mu" style="margin-top:4px">Mini : <span class="${r.s<0?'red':''}" style="color:var(--text)">${eur(r.s)}</span></div></div>`;
   $('prev').innerHTML = prev('Mois en cours', mini(U, t.slice(0,7))) + prev('Mois suivant', mini(U, suiv));
-  $('dern').innerHTML = mouvements(U, t).sort((a, b) => b.d.localeCompare(a.d)).slice(0, 10).map(x => ligne(x)).join('') || '<p class="mu" style="text-align:center">Aucune opération</p>';
+  $('dern').innerHTML = mouvementsTheoriques(U, t).sort((a, b) => b.d.localeCompare(a.d)).slice(0, 10).map(x => ligne(x)).join('') || '<p class="mu" style="text-align:center">Aucune opération</p>';
   const reg = S.ops.find(o => o.reg === M), b = $('eqBadge');
   b.textContent = reg ? 'Validé' : 'Détails / Règlement'; b.className = 'badge ' + (reg ? 'badge-success' : 'badge-warning');
   $('eq').innerHTML = `<span class="mu">${M}</span><br>${commun(M).txt}`;
@@ -590,7 +599,7 @@ function synthese(t){
 
 function detail(){
   $('mois').value = M;
-  const tous = mouvements(U, M+'-31'), avant = usr(U).init + somme(tous.filter(x => x.d < M+'-01'));
+  const tous = mouvementsTheoriques(U, M+'-31'), avant = usr(U).init + somme(tous.filter(x => x.d < M+'-01'));
   let s = avant;
   const lignes = tous.filter(x => x.d.startsWith(M)).sort((a, b) => a.d.localeCompare(b.d))
     .map(x => { s += x.m; return {x, s}; });
@@ -599,7 +608,7 @@ function detail(){
   $('d-list').innerHTML = lignes.filter(ok).reverse().map(o => ligne(o.x, F.roll ? o.s : undefined)).join('') || '<p class="mu" style="text-align:center">Aucune opération</p>';
   
   $('regles').innerHTML = S.regles.map((g, i) => g.u !== U ? '' : `<div class="op-item" onclick="ouvrirTpl(${i})">
-    <div class="op-info"><div class="op-label">${esc(g.l)} ${g.c?'🤝':''}</div><div class="op-sub">Chaque mois le ${g.jour}</div></div>
+    <div class="op-info"><div class="op-label">${esc(g.l)} ${g.c?'🤝':''}</div><div class="op-sub">Chaque mois le ${g.jour || 1}</div></div>
     <div class="op-right"><div class="op-amount ${g.m<0?'red':'green'}">${eur(g.m)}</div></div>
   </div>`).join('') || '<p class="mu" style="text-align:center">Aucune référence.</p>';
 }
@@ -629,7 +638,7 @@ function ouvrir(id){
   $('f-l').value = x ? x.l : ''; $('f-m').value = x ? Math.abs(x.m) : '';
   $('f-t').value = x && x.m > 0 ? '1' : '-1'; $('f-c').value = x && x.c ? '1' : '0';
   $('f-d').value = x ? x.d : today(); 
-  $('f-coore').checked = x ? !!x.c : false;
+  $('f-coore').checked = x ? !!x.c : false; // Par défaut non cochée si nouvelle opération
   $('f-rbox').classList.toggle('hidden', !!ED);
   ouvrirM('m-op');
 }
@@ -660,6 +669,99 @@ function retirer(id){
   S.regles[rIdx].exc = S.regles[rIdx].exc || {};
   S.regles[rIdx].exc[k] = { skip: true };
   sauver(); rendre();
+}
+
+function ouvrirTpl(idx){
+  ET = idx;
+  const isNew = idx === -1;
+  $('t-t').textContent = isNew ? 'Ajouter une référence fixe' : 'Modifier la référence fixe';
+  
+  if (!isNew) {
+    const g = S.regles[idx];
+    $('t-l').value = g.l || '';
+    $('t-m').value = g.m !== undefined ? Math.abs(g.m) : '';
+    $('t-t2').value = g.m < 0 ? '-1' : '1';
+    $('t-c').value = g.c ? '1' : '0';
+    $('t-j').value = g.jour || 1;
+    $('t-deb').value = g.debut || today().slice(0,7);
+    $('t-f').value = g.fin || '';
+    $('t-refresh-btn').style.display = 'block';
+    $('t-del-btn').style.display = 'block';
+  } else {
+    $('t-l').value = '';
+    $('t-m').value = '';
+    $('t-t2').value = '-1';
+    $('t-c').value = '0';
+    $('t-j').value = '1';
+    $('t-deb').value = today().slice(0,7);
+    $('t-f').value = '';
+    $('t-refresh-btn').style.display = 'none';
+    $('t-del-btn').style.display = 'none';
+  }
+  ouvrirM('m-tpl');
+}
+
+function enregistrerTpl(){
+  const l = $('t-l').value.trim();
+  const mVal = Math.abs(parseFloat($('t-m').value));
+  const sg = +$('t-t2').value;
+  const c = $('t-c').value === '1';
+  const jour = parseInt($('t-j').value) || 1;
+  const debut = $('t-deb').value.trim() || today().slice(0,7);
+  const fin = $('t-f').value;
+
+  if (!l || isNaN(mVal)) return msg('Veuillez remplir le libellé et le montant.');
+
+  const newData = { u: U, l, m: sg * mVal, jour, debut, fin: fin || undefined, c: false, exc: {} };
+
+  if (ET === -1) {
+    S.regles.push(newData);
+  } else {
+    newData.exc = S.regles[ET].exc || {};
+    S.regles[ET] = newData;
+  }
+  sauver();
+  fermer('m-tpl');
+  rendre();
+  msg('Référence fixe enregistrée avec succès.');
+}
+
+function rafraichirRecurrencesTpl(){
+  if (ET === -1) return;
+  const g = S.regles[ET];
+  const l = $('t-l').value.trim();
+  const mVal = Math.abs(parseFloat($('t-m').value));
+  const sg = +$('t-t2').value;
+  const c = $('t-c').value === '1';
+  const jour = parseInt($('t-j').value) || 1;
+  const debut = $('t-deb').value.trim() || today().slice(0,7);
+  const fin = $('t-f').value;
+
+  if (!l || isNaN(mVal)) return msg('Veuillez remplir le libellé et le montant.');
+
+  g.l = l;
+  g.m = sg * mVal;
+  g.jour = jour;
+  g.debut = debut;
+  g.fin = fin || undefined;
+  g.c = c;
+  g.exc = {};
+
+  sauver();
+  fermer('m-tpl');
+  rendre();
+  msg('Récurrences actualisées avec succès !');
+}
+
+function supprimerTpl(){
+  if (ET === -1) return;
+  if (confirm("Voulez-vous vraiment supprimer cette référence fixe ?")) {
+    S.regles.splice(ET, 1);
+    sauver();
+    fermer('m-tpl');
+    rendre();
+    msg('Référence fixe supprimée.');
+  }
 }
 
 function ouvrirReg(ym){
