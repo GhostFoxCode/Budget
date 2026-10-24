@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Mes Comptes - Sécurisé</title>
+<title>Mes Comptes - Partagé</title>
 
 <!-- Configuration WebApp Plein Écran -->
 <meta name="mobile-web-app-capable" content="yes">
@@ -249,9 +249,9 @@ if ('caches' in window) {
   });
 }
 
-// MISE À JOUR AVEC LES NOUVELLES CLÉS SUPABASE
 const SB_URL = 'https://owjsoiqpukflmfpjlbyz.supabase.co';
 const SB_KEY = 'sb_publishable_x3D526hO0y-6584s5Z26ZQ_E8hrDFRj';
+const SHARED_KEY = 'shared_budget'; // Clé d'enregistrement partagé
 const supabaseClient = window.supabase.createClient(SB_URL, SB_KEY);
 
 const vide = () => ({
@@ -265,7 +265,7 @@ const vide = () => ({
 
 let S = vide(), U = '2899de9f-a408-419b-aee1-c5f26980f2b4', T = 'synth', M = '', ED = '', ET = -1, RM = '', ROWS = {};
 const F = {deb:1, cre:1, men:1, pon:1, com:1, roll:1, eq:0};
-let isAdmin = false;
+let isAdmin = true; // Mode multi-utilisateur activé par défaut
 let clickCount = 0;
 let clickTimer = null;
 let reinitClickCount = 0;
@@ -302,7 +302,6 @@ function msg(t){
 }
 
 function gererClicUserSelector() {
-  if (!isAdmin) return;
   clickCount++;
   clearTimeout(clickTimer);
   clickTimer = setTimeout(() => { clickCount = 0; }, 2000);
@@ -325,11 +324,8 @@ async function verifierConnexionReelle() {
   }
 
   try {
-    const res = await fetch(`${SB_URL}/rest/v1/app_data?select=count`, {
-      method: 'HEAD',
-      headers: { 'apikey': SB_KEY }
-    });
-    if (res.ok || res.status === 401 || res.status === 403) {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (session) {
       banner.textContent = "✓ Connecté - Synchronisé";
       banner.className = "show online";
       setTimeout(() => banner.classList.remove('show'), 2500);
@@ -385,18 +381,14 @@ function gererSuccesSession(session) {
   $('auth-screen').classList.add('hidden');
   const email = (session.user.email || '').toLowerCase().trim();
   
-  // VÉRIFICATION STRICTE DES DEUX COMPTES
-  if (email === 'admin@budget.local') {
-    isAdmin = true;
-    U = '2899de9f-a408-419b-aee1-c5f26980f2b4'; // Compte Kévin
+  if (email === 'admin@budget.local' || email === 'prescillia@budget.local') {
+    if (email === 'prescillia@budget.local') {
+      U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
+    } else {
+      U = '2899de9f-a408-419b-aee1-c5f26980f2b4';
+    }
     chargerCloud();
-  } 
-  else if (email === 'prescillia@budget.local') {
-    isAdmin = false;
-    U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0'; // Compte Prescillia
-    chargerCloud();
-  } 
-  else {
+  } else {
     seDeconnecter();
   }
 }
@@ -467,9 +459,9 @@ async function chargerCloud(silencieux = false){
       const { data: { session } } = await supabaseClient.auth.getSession();
       if (!session) return;
       const token = session.access_token;
-      const userId = session.user.id;
 
-      const res = await fetch(`${SB_URL}/rest/v1/app_data?user_id=eq.${userId}`, {
+      // Charge la ligne de données communes SHARED_KEY
+      const res = await fetch(`${SB_URL}/rest/v1/app_data?user_id=eq.${SHARED_KEY}`, {
         headers: { 
           'apikey': SB_KEY, 
           'Authorization': `Bearer ${token}` 
@@ -493,8 +485,6 @@ async function chargerCloud(silencieux = false){
       console.error('Erreur chargement cloud', e); 
     }
   }
-  
-  if (!isAdmin) U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
   if (!silencieux) rendre();
 }
 
@@ -510,9 +500,8 @@ async function sauverCloudForce(){
     const { data: { session } } = await supabaseClient.auth.getSession();
     if (!session) return;
     const token = session.access_token;
-    const userId = session.user.id;
 
-    const checkRes = await fetch(`${SB_URL}/rest/v1/app_data?user_id=eq.${userId}`, {
+    const checkRes = await fetch(`${SB_URL}/rest/v1/app_data?user_id=eq.${SHARED_KEY}`, {
       headers: { 
         'apikey': SB_KEY, 
         'Authorization': `Bearer ${token}` 
@@ -521,7 +510,7 @@ async function sauverCloudForce(){
     const existing = await checkRes.json();
 
     if (existing && existing.length > 0) {
-      await fetch(`${SB_URL}/rest/v1/app_data?user_id=eq.${userId}`, {
+      await fetch(`${SB_URL}/rest/v1/app_data?user_id=eq.${SHARED_KEY}`, {
         method: 'PATCH',
         headers: { 
           'apikey': SB_KEY, 
@@ -540,7 +529,7 @@ async function sauverCloudForce(){
           'Content-Type': 'application/json', 
           'Prefer': 'return=minimal' 
         },
-        body: JSON.stringify({ user_id: userId, payload: S })
+        body: JSON.stringify({ user_id: SHARED_KEY, payload: S })
       });
     }
   } catch(e){ 
@@ -672,13 +661,7 @@ function ligne(x, s, avecCoche = true){
 function rendre(){
   ROWS = {}; const t = today(); if (!M) M = t.slice(0,7);
   
-  if (isAdmin) {
-    $('seg').innerHTML = S.users.map(u => `<button class="user-btn ${u.id===U?'active':''}" onclick="U='${u.id}';rendre()">${esc(u.nom)}</button>`).join('');
-  } else {
-    U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
-    const activeUser = usr(U);
-    $('seg').innerHTML = `<button class="user-btn active" style="cursor:default">${esc(activeUser.nom)}</button>`;
-  }
+  $('seg').innerHTML = S.users.map(u => `<button class="user-btn ${u.id===U?'active':''}" onclick="U='${u.id}';rendre()">${esc(u.nom)}</button>`).join('');
   
   for (const v of ['synth','detail','options']){
     $('tab-'+v).classList.toggle('hidden', v !== T);$('nav-'+v).classList.toggle('active', v === T);
@@ -1041,7 +1024,7 @@ function importerJSON(txt){
 
   if (Array.isArray(users) && Array.isArray(ops) && Array.isArray(regles)){
     S = { users, ops, regles };
-    U = isAdmin ? (S.users[0] ? S.users[0].id : '2899de9f-a408-419b-aee1-c5f26980f2b4') : 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
+    U = S.users[0] ? S.users[0].id : '2899de9f-a408-419b-aee1-c5f26980f2b4';
     sauver();
     rendre();
     return msg('Sauvegarde JSON restaurée et synchronisée avec succès !');
