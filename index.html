@@ -236,11 +236,17 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
 <div id="toast"></div>
 
 <script>
+// FORCE LA SUPPRESSION DE TOUT CACHE SERVICE WORKER AU DÉMARRAGE
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then(registrations => {
     for(let registration of registrations) {
       registration.unregister();
     }
+  });
+}
+if ('caches' in window) {
+  caches.keys().then(names => {
+    for (let name of names) caches.delete(name);
   });
 }
 
@@ -372,7 +378,7 @@ async function verifierSession() {
 }
 
 function verifierSessionLocale() {
-  // Exige une authentification valide Supabase (empêche la connexion fantôme hors ligne)
+  // Exige STRICTEMENT une validation de session active de Supabase
   $('auth-screen').classList.remove('hidden');
 }
 
@@ -380,20 +386,20 @@ function gererSuccesSession(session) {
   $('auth-screen').classList.add('hidden');
   const email = (session.user.email || '').toLowerCase().trim();
   
-  // 1. Compte administrateur (Kévin avec 10 clics pour basculer les utilisateurs)
+  // ADMIN : admin@budget.local
   if (email === 'admin@budget.local' || email.includes('admin') || email.includes('kevin')) {
     isAdmin = true;
     U = '2899de9f-a408-419b-aee1-c5f26980f2b4'; // Compte Kévin par défaut
   } 
-  // 2. Compte Prescillia (Seulement son utilisateur visible, pas de bascule possible)
-  else if (email === 'prescillia@budget.local' || email.includes('presci')) {
+  // PRESCILLIA : prescillia@budget.local STRICT
+  else if (email === 'prescillia@budget.local') {
     isAdmin = false;
     U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0'; // Compte Prescillia
   } 
-  // Sécurité par défaut
+  // TOUT AUTRE EMAIL NON RECONNU BLOQUE ET DÉCONNECTE
   else {
-    isAdmin = false;
-    U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
+    seDeconnecter();
+    return;
   }
   
   chargerCloud();
@@ -1021,7 +1027,7 @@ function exporterCSV(){
 
   const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
+  a.href = URL.createObjectURL(a);
   a.download = 'export_operations.csv';
   a.click();
 }
