@@ -47,9 +47,10 @@ main{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column
 .tab{display:flex;flex-direction:column;gap:10px}
 .card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
 .card-title{font-size:.78rem;font-weight:700;color:var(--text-muted);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;text-transform:uppercase;letter-spacing:.5px}
-.metrics-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.metric-box{background:rgba(15,23,42,.6);border:1px solid var(--border);padding:10px 12px;border-radius:14px}
-.metric-label{font-size:.72rem;color:var(--text-muted)}.metric-val{font-size:1.1rem;font-weight:800;margin-top:4px}
+.metrics-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.metric-box{background:rgba(15,23,42,.6);border:1px solid var(--border);padding:8px 8px;border-radius:12px}
+.metric-label{font-size:.65rem;color:var(--text-muted);line-height:1.1}
+.metric-val{font-size:.95rem;font-weight:800;margin-top:4px}
 .green{color:var(--green)}.red{color:var(--red)}
 .btn-primary{width:100%;background:var(--accent-gradient);color:#fff;border:none;padding:12px;border-radius:14px;font-weight:700;font-size:.9rem;cursor:pointer;box-shadow:0 4px 15px rgba(99,102,241,.3)}
 .btn-ghost{background:rgba(255,255,255,.08);box-shadow:none;margin-bottom:8px}
@@ -190,8 +191,10 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
   <label>Type<select id="f-t"><option value="-1">Débit (Dépense)</option><option value="1">Crédit (Rentrée)</option></select></label>
   <label>Répartition / Charges communes<select id="f-c"><option value="0">Opération personnelle</option><option value="1">Charge commune (Partagé 50/50)</option></select></label>
   <label>Date<input type="date" id="f-d"></label>
-  <label class="row" id="f-coorelem"><input type="checkbox" id="f-coore">Opération pointée / validée</label>
-  <label class="row" id="f-rbox"><input type="checkbox" id="f-r">Se répète chaque mois</label>
+  <label class="row" id="f-rbox"><input type="checkbox" id="f-r" onchange="basculerRecurrenceModal(this.checked)">Se répète chaque mois</label>
+  <div id="f-fin-container" style="display:none; flex-direction:column; gap:4px;">
+    <label>Date de fin (optionnel)<input type="date" id="f-fin"></label>
+  </div>
   <p class="mu" id="f-note"></p>
   <button class="btn-primary" onclick="enregistrer()">Enregistrer</button></div>
 </div></div>
@@ -376,7 +379,6 @@ function reinitialiserApplication() {
   }
 }
 
-// Fonction pour tout décocher (décompte et pointage)
 function reinitialiserCoches() {
   if (confirm("Voulez-vous décocher toutes les opérations ?")) {
     S.ops.forEach(o => o.checked = false);
@@ -492,14 +494,12 @@ window.addEventListener('focus', () => {
 function brut(uid, hingga, seulementNonCoche = false){
   const r = [];
   
-  // Traitement des opérations directes
   S.ops.filter(o => o.u === uid && o.d <= hingga).forEach(o => {
     if (!seulementNonCoche || !o.checked) {
       r.push({u: o.u, d: o.d, l: o.l, m: o.m, c: o.c, checked: !!o.checked, opObj: o});
     }
   });
 
-  // Traitement des règles récurrentes
   for (const g of S.regles.filter(g => g.u === uid)){
     if (!g.debut) g.debut = '2026-01-01';
     const [y, m0] = g.debut.split('-').map(Number);
@@ -548,13 +548,11 @@ function projections(uid, hingga, seulementNonCoche = false){
   return r;
 }
 
-// Solde Banque : opérations NON cochées (en attente)
 const mouvementsBanque = (uid, j) => brut(uid, j, true);
-
-// Solde Théorique : TOUTES les opérations (cochées et non cochées) + projections
 const mouvementsTheoriques = (uid, j) => brut(uid, j, false).concat(projections(uid, j, false));
 
 const soldeActuelBanque = (uid, date) => usr(uid).init + somme(mouvementsBanque(uid, date));
+const soldeTheoriqueActuel = (uid, date) => usr(uid).init + somme(mouvementsTheoriques(uid, date));
 const soldeTheoriqueFinMois = (uid, date) => usr(uid).init + somme(mouvementsTheoriques(uid, date));
 
 function mini(uid, ym){
@@ -587,13 +585,13 @@ function toggleCheck(id, event) {
   rendre();
 }
 
-function ligne(x, s){
+function ligne(x, s, avecCoche = true){
   const t = today(), id = x.proj ? 'p'+x.k : cle(x); ROWS[id] = x;
   const opReal = x.opObj || S.ops.find(o => S.ops.indexOf(o) === +id.slice(1));
   const i = opReal ? S.ops.indexOf(opReal) : -1;
   
   const del = x.proj ? '' : `<button class="del-btn" onclick="event.stopPropagation();${i>=0?`supprimer(${i})`:`retirer('${id}')`}">✕</button>`;
-  const checkboxHtml = x.proj ? '' : `<input type="checkbox" ${x.checked ? 'checked' : ''} onclick="toggleCheck('${id}', event)" style="margin-right:8px; cursor:pointer;" title="Décompte solde banque">`;
+  const checkboxHtml = (!avecCoche || x.proj) ? '' : `<input type="checkbox" ${x.checked ? 'checked' : ''} onclick="toggleCheck('${id}', event)" style="margin-right:8px; cursor:pointer;" title="Décompte solde banque">`;
   
   return `<div class="op-item ${x.d===t?'today-op':''}" style="${x.d>t?'opacity:.7':''}" onclick="${x.proj?`ouvrirReg('${x.k}')`:`ouvrir('${id}')`}">
    <div class="op-info">
@@ -627,14 +625,18 @@ function synthese(t){
   const [y, m] = t.split('-').map(Number), suiv = iso(new Date(y, m, 1)).slice(0,7);
   const box = (n, v) => `<div class="metric-box"><div class="metric-label">${n}</div><div class="metric-val ${v<0?'red':'green'}">${eur(v)}</div></div>`;
   
-  // Solde Actuel / Banque = Uniquement les opérations non cochées
-  // Solde Théorique = Fin de mois estimé (toutes opérations)
-  $('apercu').innerHTML = box('Solde actuel (Banque)', soldeActuelBanque(U, t)) + box('Fin de mois estimé', soldeTheoriqueFinMois(U, iso(new Date(y, m, 0))));
+  // Les 3 soldes demandés : Solde actuel (Banque), Solde théorique, Fin de mois estimé
+  $('apercu').innerHTML = box('Solde actuel (Banque)', soldeActuelBanque(U, t)) + 
+                          box('Solde théorique', soldeTheoriqueActuel(U, t)) + 
+                          box('Fin de mois estimé', soldeTheoriqueFinMois(U, iso(new Date(y, m, 0))));
   
   const prev = (n, r) => `<div class="metric-box"><div class="metric-label" style="font-weight:700;color:var(--text)">${n}</div>
     <div class="mu" style="margin-top:4px">Mini : <span class="${r.s<0?'red':''}" style="color:var(--text)">${eur(r.s)}</span></div></div>`;
   $('prev').innerHTML = prev('Mois en cours', mini(U, t.slice(0,7))) + prev('Mois suivant', mini(U, suiv));
-  $('dern').innerHTML = mouvementsTheoriques(U, t).sort((a, b) => b.d.localeCompare(a.d)).slice(0, 10).map(x => ligne(x)).join('') || '<p class="mu" style="text-align:center">Aucune opération</p>';
+  
+  // Dernières opérations sans la case à cocher (avecCoche = false)
+  $('dern').innerHTML = mouvementsTheoriques(U, t).sort((a, b) => b.d.localeCompare(a.d)).slice(0, 10).map(x => ligne(x, undefined, false)).join('') || '<p class="mu" style="text-align:center">Aucune opération</p>';
+  
   const reg = S.ops.find(o => o.reg === M), b = $('eqBadge');
   b.textContent = reg ? 'Validé' : 'Détails / Règlement'; b.className = 'badge ' + (reg ? 'badge-success' : 'badge-warning');
   $('eq').innerHTML = `<span class="mu">${M}</span><br>${commun(M).txt}`;
@@ -648,7 +650,9 @@ function detail(){
     .map(x => { s += x.m; return {x, s}; });
   const ok = o => (o.x.m < 0 ? F.deb : F.cre) && (o.x.g ? F.men : F.pon) && (F.com || !o.x.c);
   $('detailEq').classList.toggle('hidden', !F.eq); $('detailEqText').textContent = commun(M).txt;
-  $('d-list').innerHTML = lignes.filter(ok).reverse().map(o => ligne(o.x, F.roll ? o.s : undefined)).join('') || '<p class="mu" style="text-align:center">Aucune opération</p>';
+  
+  // Dans détail, on conserve la case à cocher (avecCoche = true)
+  $('d-list').innerHTML = lignes.filter(ok).reverse().map(o => ligne(o.x, F.roll ? o.s : undefined, true)).join('') || '<p class="mu" style="text-align:center">Aucune opération</p>';
   
   $('regles').innerHTML = S.regles.map((g, i) => g.u !== U ? '' : `<div class="op-item" onclick="ouvrirTpl(${i})">
     <div class="op-info"><div class="op-label">${esc(g.l)} ${g.c?'🤝':''}</div><div class="op-sub">Chaque mois le ${g.jour || 1}</div></div>
@@ -675,20 +679,31 @@ function saveParams(){
   });
 }
 
+function basculerRecurrenceModal(estCoche) {
+  $('f-fin-container').style.display = estCoche ? 'flex' : 'none';
+}
+
 function ouvrir(id){
   ED = id || ''; const x = ED ? ROWS[ED] : null;
   $('m-t').textContent = x ? 'Modifier' : 'Nouvelle opération';
   $('f-l').value = x ? x.l : ''; $('f-m').value = x ? Math.abs(x.m) : '';
   $('f-t').value = x && x.m > 0 ? '1' : '-1'; $('f-c').value = x && x.c ? '1' : '0';
   $('f-d').value = x ? x.d : today(); 
-  $('f-coore').checked = x ? !!x.checked : false; // Par défaut décoché
+  
+  // Masquer la case récurrence en édition, l'afficher en création
   $('f-rbox').classList.toggle('hidden', !!ED);
+  $('f-r').checked = false;
+  $('f-fin').value = '';
+  $('f-fin-container').style.display = 'none';
+
   ouvrirM('m-op');
 }
 
 function enregistrer(){
   const l = $('f-l').value.trim(), v = Math.abs(parseFloat($('f-m').value)), d = $('f-d').value, sg = +$('f-t').value, c = $('f-c').value === '1';
-  const checkedState = $('f-coore').checked;
+  const estRecurrent = !$('f-rbox').classList.contains('hidden') && $('f-r').checked;
+  const dateFinRecurrence = $('f-fin').value;
+
   if (!l || isNaN(v) || !d) return msg('Champs requis.');
   
   if (ED) {
@@ -699,10 +714,26 @@ function enregistrer(){
       opReal.m = sg * v;
       opReal.d = d;
       opReal.c = c;
-      opReal.checked = checkedState;
     }
   } else {
-    S.ops.push({u:U, l, m: sg * v, d, c, checked: checkedState});
+    if (estRecurrent) {
+      // Création sous forme de règle récurrente (référence fixe) avec date de fin optionnelle
+      const jourDuMois = parseInt(d.slice(8)) || 1;
+      const moisDebut = d.slice(0,7);
+      S.regles.push({
+        u: U,
+        l,
+        m: sg * v,
+        jour: jourDuMois,
+        debut: moisDebut,
+        fin: dateFinRecurrence || undefined,
+        c,
+        checked: false,
+        exc: {}
+      });
+    } else {
+      S.ops.push({u: U, l, m: sg * v, d, c, checked: false});
+    }
   }
   sauver(); fermer('m-op'); rendre();
 }
