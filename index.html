@@ -691,7 +691,7 @@ function detail(){
         }
       });
       if (itemsModif.length > 0) {
-        modificationsHtml = `<div style="font-size:0.7rem; color:var(--text-muted); margin-top:4px;">Modifications : ${itemsModif.join('')}</div>`;
+        modificationsHtml = `<div style="font-size:0.7rem; color:var(--text-muted); margin-top:4px;">Modifications de mois : ${itemsModif.join('')}</div>`;
       }
     }
 
@@ -726,30 +726,17 @@ function supprimerModifExc(ruleIdx, k) {
 function mettreAJourRecurrencesFutures(idx) {
   const g = S.regles[idx];
   if (!g) return;
-  const nouveauMontantStr = prompt(`Modifier le montant de référence pour "${g.l}" (la synchronisation se fera à partir de M+1, le mois en cours ne sera pas touché) :`, Math.abs(g.m));
+  const nouveauMontantStr = prompt(`Modifier le montant de référence pour "${g.l}" (la mise à jour s'appliquera à partir de M+1) :`, Math.abs(g.m));
   if (nouveauMontantStr === null) return;
   const val = parseFloat(nouveauMontantStr.replace(',', '.'));
   if (isNaN(val)) return msg('Montant invalide.');
   
   const typeActuel = g.m < 0 ? -1 : 1;
-  const nouveauMontantFinal = typeActuel * val;
-  
-  const now = new Date();
-  const anneeCourante = now.getFullYear();
-  const moisCourant = now.getMonth() + 1;
-  const ymCourant = `${anneeCourante}-${p2(moisCourant)}`;
-  
-  g.exc = g.exc || {};
-  g.exc[ymCourant] = g.exc[ymCourant] || {};
-  
-  const montantActuelMoisEnCours = g.exc[ymCourant].m !== undefined ? g.exc[ymCourant].m : g.m;
-  g.exc[ymCourant].m = montantActuelMoisEnCours;
-
-  g.m = nouveauMontantFinal;
+  g.m = typeActuel * val;
 
   sauver();
   rendre();
-  msg('Récurrences futures mises à jour à partir de M+1 (le mois en cours a été préservé) !');
+  msg("Référence mise à jour. Les mois futurs (à partir de M+1) utiliseront ce nouveau montant.");
 }
 
 function supprimerTplDirect(idx) {
@@ -788,7 +775,7 @@ function ouvrir(id){
   ED = id || ''; 
   const x = ED ? ROWS[ED] : null;
 
-  $('m-t').textContent = x ? (x.g ? 'Modifier cette récurrence (mois)' : 'Modifier') : 'Nouvelle opération';
+  $('m-t').textContent = x ? (x.g ? 'Modifier l\'occurrence de ce mois' : 'Modifier') : 'Nouvelle opération';
   $('f-l').value = x ? x.l : ''; 
   $('f-m').value = x ? Math.abs(x.m) : '';
   $('f-t').value = x && x.m > 0 ? '1' : '-1'; 
