@@ -220,7 +220,7 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
   <label>Mois de début (AAAA-MM)<input type="text" id="t-deb" placeholder="Ex: 2026-01"></label>
   <label>Date de fin (optionnel)<input type="date" id="t-f"></label>
   <button class="btn-primary" onclick="enregistrerTpl()">Sauvegarder</button>
-  <button class="btn-primary btn-ghost" id="t-refresh-btn" onclick="rafraichirRecurrencesTpl()" style="display:none;background:var(--warning);color:#000;margin-top:4px">🔄 Actualiser les récurrences futures (M+1)</button>
+  <button class="btn-primary btn-ghost" id="t-refresh-btn" onclick="rafraichirRecurrencesTpl()" style="display:none;background:var(--warning);color:#000;margin-top:4px">🔄 Appliquer la modification (M+1 et suivants)</button>
   <button class="btn-primary btn-ghost" id="t-del-btn" onclick="supprimerTpl()" style="display:none;color:var(--red);margin-top:4px">Supprimer cette référence</button>
  </div>
 </div></div>
@@ -368,11 +368,11 @@ function gererSuccesSession(session) {
   const email = (session.user.email || '').toLowerCase().trim();
   
   if (email === 'admin@budget.local') {
-    isAdmin = true; // Kévin a les droits admin
+    isAdmin = true;
     U = '2899de9f-a408-419b-aee1-c5f26980f2b4';
     chargerCloud();
   } else if (email === 'prescillia@budget.local') {
-    isAdmin = false; // Prescillia est limitée à son seul profil
+    isAdmin = false;
     U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
     chargerCloud();
   } else {
@@ -615,7 +615,6 @@ function toggleCheck(id, event) {
   event.stopPropagation();
   const x = ROWS[id];
   if (!x) return;
-  // Vérification de droit si non-admin
   if (!isAdmin && x.u !== U) {
     msg("Vous ne pouvez modifier que vos propres opérations.");
     return;
@@ -638,7 +637,6 @@ function ligne(x, s, avecCoche = true){
   const opReal = x.opObj || S.ops.find(o => S.ops.indexOf(o) === +id.slice(1));
   const i = opReal ? S.ops.indexOf(opReal) : -1;
   
-  // Droit de suppression : Admin (Kévin) peut TOUT supprimer, Prescillia ne peut supprimer QUE ses opérations
   const peutModifier = isAdmin || x.u === U;
   const del = (x.proj || !peutModifier) ? '' : `<button class="del-btn" onclick="event.stopPropagation();${i>=0?`supprimer(${i})`:`retirer('${id}')`}">✕</button>`;
   const checkboxHtml = (!avecCoche || x.proj) ? '' : `<input type="checkbox" ${x.checked ? 'checked' : ''} ${!peutModifier ? 'disabled' : ''} onclick="toggleCheck('${id}', event)" style="margin-right:8px; cursor:${peutModifier?'pointer':'default'};" title="Décompte solde banque">`;
@@ -777,17 +775,21 @@ function mettreAJourRecurrencesFutures(idx) {
   if (!g) return;
   if (!isAdmin && g.u !== U) return msg("Non autorisé.");
   
-  const nouveauMontantStr = prompt(`Modifier le montant de référence pour "${g.l}" (la mise à jour s'appliquera à partir de M+1) :`, Math.abs(g.m));
-  if (nouveauMontantStr === null) return;
-  const val = parseFloat(nouveauMontantStr.replace(',', '.'));
-  if (isNaN(val)) return msg('Montant invalide.');
+  const nouveauMontant = Math.abs(parseFloat($('t-m').value));
+  if (isNaN(nouveauMontant)) return msg('Montant invalide.');
   
   const typeActuel = g.m < 0 ? -1 : 1;
-  g.m = typeActuel * val;
+  g.m = typeActuel * nouveauMontant;
+  g.l = $('t-l').value.trim() || g.l;
+  g.jour = parseInt($('t-j').value) || g.jour;
+  g.debut = $('t-deb').value.trim() || g.debut;
+  g.fin = $('t-f').value || g.fin;
+  g.c = $('t-c').value === '1';
 
   sauver();
+  fermer('m-tpl');
   rendre();
-  msg("Référence mise à jour. Les mois futurs (à partir de M+1) utiliseront ce nouveau montant.");
+  msg("Référence mise à jour avec succès.");
 }
 
 function decaler(n){
@@ -962,9 +964,7 @@ function enregistrerTpl(){
 
 function rafraichirRecurrencesTpl(){
   if (ET === -1) return;
-  const idx = ET;
-  fermer('m-tpl');
-  mettreAJourRecurrencesFutures(idx);
+  mettreAJourRecurrencesFutures(ET);
 }
 
 function supprimerTpl(){
@@ -1022,7 +1022,7 @@ function exporterCSV(){
 
   const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(a);
+  a.href = URL.createObjectURL(blob);
   a.download = 'export_operations.csv';
   a.click();
 }
