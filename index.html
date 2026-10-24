@@ -152,7 +152,7 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
     </div>
    </details>
 
-   <!-- RÉFÉRENCES FIXES (AVEC SUMMARY ET BOUTON SÉPARÉS) -->
+   <!-- RÉFÉRENCES FIXES -->
    <details class="card">
     <summary class="card-title" style="margin-bottom:0; display:flex; justify-content:space-between; align-items:center; width:100%;">
       <span>📌 Références fixes</span>
@@ -236,7 +236,6 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
 <div id="toast"></div>
 
 <script>
-// Enregistrement automatique d'un Service Worker en arrière-plan (permet d'ouvrir l'app hors-ligne)
 if ('serviceWorker' in navigator) {
   const swCode = `
     self.addEventListener('install', e => self.skipWaiting());
@@ -371,7 +370,6 @@ async function verifierSession() {
       verifierSessionLocale();
     }
   } catch (e) {
-    // Si hors ligne et que getSession() plante, on vérifie si une session locale existe
     verifierSessionLocale();
   }
   verifierConnexionReelle();
@@ -424,8 +422,22 @@ async function seConnecter() {
   }
 }
 
+/* DECONNEXION ROBUSTE (FONCTIONNE HORS LIGNE ET EN LIGNE) */
 async function seDeconnecter() {
-  await supabaseClient.auth.signOut();
+  try {
+    if (navigator.onLine) {
+      await supabaseClient.auth.signOut();
+    }
+  } catch(e) {}
+  
+  // Suppression manuelle des jetons pour déconnecter à coup sûr
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
+      localStorage.removeItem(key);
+    }
+  }
+  sessionStorage.clear();
   location.reload();
 }
 
@@ -734,7 +746,6 @@ function detail(){
   
   $('d-list').innerHTML = lignes.filter(ok).reverse().map(o => ligne(o.x, F.roll ? o.s : undefined, true)).join('') || '<p class="mu" style="text-align:center">Aucune opération</p>';
   
-  // Tri des références fixes par jour de déclenchement (du 1er au 31)
   const reglesTriable = S.regles
     .map((g, origIndex) => ({ g, origIndex }))
     .filter(item => item.g.u === U)
