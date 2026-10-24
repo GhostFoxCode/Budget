@@ -659,7 +659,7 @@ function synthese(t){
   
   $('prev').innerHTML = prev('Mois en cours', moisEnCoursNom, mini(U, t.slice(0,7))) + prev('Mois suivant', moisSuivantNom, mini(U, suiv));
   
-  $('dern').innerHTML = mouvementsTheoriques(U, t).sort((a, b) => b.d.localeCompare(b.d)).slice(0, 10).map(x => ligne(x, undefined, false)).join('') || '<p class="mu" style="text-align:center">Aucune opération</p>';
+  $('dern').innerHTML = mouvementsTheoriques(U, t).sort((a, b) => b.d.localeCompare(a.d)).slice(0, 10).map(x => ligne(x, undefined, false)).join('') || '<p class="mu" style="text-align:center">Aucune opération</p>';
   
   const reg = S.ops.find(o => o.reg === M), b = $('eqBadge');
   b.textContent = reg ? 'Validé' : 'Détails / Règlement'; b.className = 'badge ' + (reg ? 'badge-success' : 'badge-warning');
@@ -787,16 +787,8 @@ function basculerRecurrenceModal(estCoche) {
 function ouvrir(id){
   ED = id || ''; 
   const x = ED ? ROWS[ED] : null;
-  
-  if (x && x.g) {
-    const regleIdx = S.regles.indexOf(x.g);
-    if (regleIdx !== -1) {
-      ouvrirTpl(regleIdx);
-      return;
-    }
-  }
 
-  $('m-t').textContent = x ? 'Modifier' : 'Nouvelle opération';
+  $('m-t').textContent = x ? (x.g ? 'Modifier cette récurrence (mois)' : 'Modifier') : 'Nouvelle opération';
   $('f-l').value = x ? x.l : ''; 
   $('f-m').value = x ? Math.abs(x.m) : '';
   $('f-t').value = x && x.m > 0 ? '1' : '-1'; 
