@@ -171,7 +171,7 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
    <!-- SESSION & DÉCONNEXION -->
    <div class="card">
     <div class="card-title">Session</div>
-    <button class="btn-primary btn-ghost" style="color:var(--red);margin-bottom:0" onclick="seDeconnecter()">Se déconnecter</button>
+    <button class="btn-primary btn-ghost" type="button" style="color:var(--red);margin-bottom:0" onclick="seDeconnecter()">Se déconnecter</button>
    </div>
 
    <!-- OPTIONS DÉVELOPPEUR -->
@@ -422,18 +422,16 @@ async function seConnecter() {
   }
 }
 
-/* DECONNEXION ROBUSTE (FONCTIONNE HORS LIGNE ET EN LIGNE) */
-async function seDeconnecter() {
+function seDeconnecter() {
   try {
     if (navigator.onLine) {
-      await supabaseClient.auth.signOut();
+      supabaseClient.auth.signOut().catch(() => {});
     }
   } catch(e) {}
   
-  // Suppression manuelle des jetons pour déconnecter à coup sûr
   for (let i = localStorage.length - 1; i >= 0; i--) {
     const key = localStorage.key(i);
-    if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
+    if (key && (key.startsWith('sb-') || key.includes('supabase'))) {
       localStorage.removeItem(key);
     }
   }
@@ -479,8 +477,9 @@ async function chargerCloud(silencieux = false){
       const { data: { session } } = await supabaseClient.auth.getSession();
       if (!session) return;
       const token = session.access_token;
+      const userId = session.user.id;
 
-      const res = await fetch(`${SB_URL}/rest/v1/app_data?user_id=eq.${session.user.id}`, {
+      const res = await fetch(`${SB_URL}/rest/v1/app_data?user_id=eq.${userId}`, {
         headers: { 
           'apikey': SB_KEY, 
           'Authorization': `Bearer ${token}` 
