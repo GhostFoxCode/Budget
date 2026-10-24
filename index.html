@@ -265,7 +265,7 @@ const vide = () => ({
 
 let S = vide(), U = '2899de9f-a408-419b-aee1-c5f26980f2b4', T = 'synth', M = '', ED = '', ET = -1, RM = '', ROWS = {};
 const F = {deb:1, cre:1, men:1, pon:1, com:1, roll:1, eq:0};
-let isAdmin = false; // Désactivé par défaut pour masquer le sélecteur à Prescillia
+let isAdmin = false;
 let clickCount = 0;
 let clickTimer = null;
 let reinitClickCount = 0;
@@ -314,28 +314,17 @@ function gererClicUserSelector() {
   }
 }
 
-async function verifierConnexionReelle() {
+function verifierConnexionReelle() {
   const banner = $('net-status');
   if (!banner) return;
   
   if (!navigator.onLine) {
-    banner.textContent = "⚠️ Mode hors ligne - Sauvegarde locale active";
+    banner.textContent = "⚠️ Mode hors ligne - Vos données sont sauvegardées localement";
     banner.className = "show";
-    return;
-  }
-
-  try {
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if (session) {
-      banner.textContent = "✓ Connecté - Synchronisé";
-      banner.className = "show online";
-      setTimeout(() => banner.classList.remove('show'), 2500);
-    } else {
-      throw new Error();
-    }
-  } catch(e) {
-    banner.textContent = "⚠️ Mode hors ligne - Sauvegarde locale active";
-    banner.className = "show";
+  } else {
+    banner.textContent = "✓ Connecté - Synchronisé";
+    banner.className = "show online";
+    setTimeout(() => banner.classList.remove('show'), 2000);
   }
 }
 
@@ -348,11 +337,7 @@ window.addEventListener('online', async () => {
 });
 
 window.addEventListener('offline', () => {
-  const banner = $('net-status');
-  if(banner) {
-    banner.textContent = "⚠️ Mode hors ligne - Sauvegarde locale active";
-    banner.className = "show";
-  }
+  verifierConnexionReelle();
 });
 
 async function verifierSession() {
@@ -383,11 +368,11 @@ function gererSuccesSession(session) {
   const email = (session.user.email || '').toLowerCase().trim();
   
   if (email === 'admin@budget.local') {
-    isAdmin = true; // Seul Kévin voit le sélecteur Kévin/Prescillia
+    isAdmin = true;
     U = '2899de9f-a408-419b-aee1-c5f26980f2b4';
     chargerCloud();
   } else if (email === 'prescillia@budget.local') {
-    isAdmin = false; // Prescillia ne voit que son propre compte
+    isAdmin = false;
     U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
     chargerCloud();
   } else {
@@ -456,44 +441,44 @@ function reinitialiserCoches() {
 }
 
 async function chargerCloud(silencieux = false){
-  if (navigator.onLine) {
-    try {
-      const { data: { session } } = await supabaseClient.auth.getSession();
-      if (!session) return;
-      const token = session.access_token;
+  if (!navigator.onLine) return;
+  try {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session) return;
+    const token = session.access_token;
 
-      const res = await fetch(`${SB_URL}/rest/v1/app_data?user_id=eq.${SHARED_KEY}`, {
-        headers: { 
-          'apikey': SB_KEY, 
-          'Authorization': `Bearer ${token}` 
-        }
-      });
-      if (res.ok){
-        const data = await res.json();
-        if (data && data.length > 0 && data[0].payload){
-          const remoteData = data[0].payload;
-          if (JSON.stringify(remoteData) !== JSON.stringify(S)){
-            S = remoteData;
-            localStorage.setItem('mon_budget_local_data', JSON.stringify(S));
-            const modalOuverte = !$('m-op').classList.contains('hidden') || !$('m-tpl').classList.contains('hidden') || !$('m-reg').classList.contains('hidden');
-            if (!silencieux || !modalOuverte) {
-              rendre();
-            }
+    const res = await fetch(`${SB_URL}/rest/v1/app_data?user_id=eq.${SHARED_KEY}`, {
+      headers: { 
+        'apikey': SB_KEY, 
+        'Authorization': `Bearer ${token}` 
+      }
+    });
+    if (res.ok){
+      const data = await res.json();
+      if (data && data.length > 0 && data[0].payload){
+        const remoteData = data[0].payload;
+        if (JSON.stringify(remoteData) !== JSON.stringify(S)){
+          S = remoteData;
+          localStorage.setItem('mon_budget_local_data', JSON.stringify(S));
+          const modalOuverte = !$('m-op').classList.contains('hidden') || !$('m-tpl').classList.contains('hidden') || !$('m-reg').classList.contains('hidden');
+          if (!silencieux || !modalOuverte) {
+            rendre();
           }
         }
       }
-    } catch(e){ 
-      console.error('Erreur chargement cloud', e); 
     }
+  } catch(e){ 
+    console.error('Erreur chargement cloud', e); 
   }
   if (!isAdmin) U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
-  if (!silencieux) rendre();
 }
 
 async function sauver(){
   localStorage.setItem('mon_budget_local_data', JSON.stringify(S));
   if (navigator.onLine) {
     await sauverCloudForce();
+  } else {
+    msg("Modification enregistrée localement (Hors ligne)");
   }
 }
 
@@ -543,7 +528,7 @@ setInterval(() => {
   if (navigator.onLine && !document.hidden) {
     chargerCloud(true);
   }
-}, 5000);
+}, 4000);
 
 window.addEventListener('focus', () => {
   verifierSession();
