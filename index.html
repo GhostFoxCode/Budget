@@ -251,7 +251,7 @@ if ('caches' in window) {
 
 const SB_URL = 'https://owjsoiqpukflmfpjlbyz.supabase.co';
 const SB_KEY = 'sb_publishable_x3D526hO0y-6584s5Z26ZQ_E8hrDFRj';
-const SHARED_KEY = 'shared_budget'; // Clé d'enregistrement partagé
+const SHARED_KEY = 'shared_budget';
 const supabaseClient = window.supabase.createClient(SB_URL, SB_KEY);
 
 const vide = () => ({
@@ -265,7 +265,7 @@ const vide = () => ({
 
 let S = vide(), U = '2899de9f-a408-419b-aee1-c5f26980f2b4', T = 'synth', M = '', ED = '', ET = -1, RM = '', ROWS = {};
 const F = {deb:1, cre:1, men:1, pon:1, com:1, roll:1, eq:0};
-let isAdmin = true; // Mode multi-utilisateur activé par défaut
+let isAdmin = false; // Désactivé par défaut pour masquer le sélecteur à Prescillia
 let clickCount = 0;
 let clickTimer = null;
 let reinitClickCount = 0;
@@ -302,6 +302,7 @@ function msg(t){
 }
 
 function gererClicUserSelector() {
+  if (!isAdmin) return;
   clickCount++;
   clearTimeout(clickTimer);
   clickTimer = setTimeout(() => { clickCount = 0; }, 2000);
@@ -381,12 +382,13 @@ function gererSuccesSession(session) {
   $('auth-screen').classList.add('hidden');
   const email = (session.user.email || '').toLowerCase().trim();
   
-  if (email === 'admin@budget.local' || email === 'prescillia@budget.local') {
-    if (email === 'prescillia@budget.local') {
-      U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
-    } else {
-      U = '2899de9f-a408-419b-aee1-c5f26980f2b4';
-    }
+  if (email === 'admin@budget.local') {
+    isAdmin = true; // Seul Kévin voit le sélecteur Kévin/Prescillia
+    U = '2899de9f-a408-419b-aee1-c5f26980f2b4';
+    chargerCloud();
+  } else if (email === 'prescillia@budget.local') {
+    isAdmin = false; // Prescillia ne voit que son propre compte
+    U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
     chargerCloud();
   } else {
     seDeconnecter();
@@ -460,7 +462,6 @@ async function chargerCloud(silencieux = false){
       if (!session) return;
       const token = session.access_token;
 
-      // Charge la ligne de données communes SHARED_KEY
       const res = await fetch(`${SB_URL}/rest/v1/app_data?user_id=eq.${SHARED_KEY}`, {
         headers: { 
           'apikey': SB_KEY, 
@@ -485,6 +486,7 @@ async function chargerCloud(silencieux = false){
       console.error('Erreur chargement cloud', e); 
     }
   }
+  if (!isAdmin) U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
   if (!silencieux) rendre();
 }
 
@@ -661,7 +663,13 @@ function ligne(x, s, avecCoche = true){
 function rendre(){
   ROWS = {}; const t = today(); if (!M) M = t.slice(0,7);
   
-  $('seg').innerHTML = S.users.map(u => `<button class="user-btn ${u.id===U?'active':''}" onclick="U='${u.id}';rendre()">${esc(u.nom)}</button>`).join('');
+  if (isAdmin) {
+    $('seg').innerHTML = S.users.map(u => `<button class="user-btn ${u.id===U?'active':''}" onclick="U='${u.id}';rendre()">${esc(u.nom)}</button>`).join('');
+  } else {
+    U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
+    const activeUser = usr(U);
+    $('seg').innerHTML = `<button class="user-btn active" style="cursor:default">${esc(activeUser.nom)}</button>`;
+  }
   
   for (const v of ['synth','detail','options']){
     $('tab-'+v).classList.toggle('hidden', v !== T);$('nav-'+v).classList.toggle('active', v === T);
