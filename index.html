@@ -153,7 +153,7 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
    </details>
 
    <!-- RÉFÉRENCES FIXES -->
-   <details class="card">
+   <details class="card" open>
     <summary class="card-title" style="margin-bottom:0; display:flex; justify-content:space-between; align-items:center; width:100%;">
       <span>📌 Références fixes</span>
       <span class="badge badge-success" onclick="event.preventDefault(); event.stopPropagation(); ouvrirTpl(-1);">+ Ajouter modèle</span>
@@ -220,7 +220,6 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
   <label>Mois de début (AAAA-MM)<input type="text" id="t-deb" placeholder="Ex: 2026-01"></label>
   <label>Date de fin (optionnel)<input type="date" id="t-f"></label>
   <button class="btn-primary" onclick="enregistrerTpl()">Sauvegarder</button>
-  <button class="btn-primary btn-ghost" id="t-refresh-btn" onclick="rafraichirRecurrencesTpl()" style="display:none;background:var(--warning);color:#000;margin-top:4px">🔄 Appliquer la modification (M+1 et suivants)</button>
   <button class="btn-primary btn-ghost" id="t-del-btn" onclick="supprimerTpl()" style="display:none;color:var(--red);margin-top:4px">Supprimer cette référence</button>
  </div>
 </div></div>
@@ -543,14 +542,27 @@ function brut(uid, hingga, seulementNonCoche = false){
     }
   });
 
+  // Pour s'assurer qu'on couvre bien jusqu me jusqu'à +12 mois par rapport à aujourd'hui
+  const now = new Date();
+  const maxHorizonIso = iso(new Date(now.getFullYear(), now.getMonth() + 12, 31));
+  const dateLimiteFinale = hingga > maxHorizonIso ? hingga : maxHorizonIso;
+
   for (const g of S.regles.filter(g => g.u === uid)){
-    if (!g.debut) g.debut = '2026-01-01';
-    const [y, m0] = g.debut.split('-').map(Number);
+    let debStr = g.debut;
+    if (!debStr) debStr = '2026-01';
+    if (debStr.length === 7) debStr = debStr + '-01';
+    
+    const [y, m0] = debStr.split('-').map(Number);
+    
     for (let m = m0 - 1; ; m++){
       const d = safeDateIso(y, m, g.jour || 1);
-      if (iso(new Date(y, m - 1, 1)) > hingga || (g.fin && d > g.fin)) break;
-      if (d < g.debut) continue;
-      const k = d.slice(0,7), e = g.exc && g.exc[k];
+      
+      // On s'arrête si la date dépasse la limite demandée
+      if (d > dateLimiteFinale || (g.fin && d > g.fin)) break;
+      if (d < debStr) continue;
+      
+      const k = d.slice(0,7);
+      const e = g.exc && g.exc[k];
       if (e && e.skip) continue;
       
       const dd = e && e.d ? e.d : d;
@@ -671,8 +683,14 @@ function rendre(){
 }
 
 function formaterDateFr(dateIso) {
-  const [y, m, d] = dateIso.split('-');
-  return `${d}/${m}/${y.slice(-2)}`;
+  if (!dateIso) return '';
+  const parts = dateIso.split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0].slice(-2)}`;
+  } else if (parts.length === 2) {
+    return `${parts[1]}/${parts[0]}`;
+  }
+  return dateIso;
 }
 
 function synthese(t){
@@ -726,24 +744,30 @@ function detail(){
   $('regles').innerHTML = reglesTriable.map(({ g, origIndex }) => {
     const mClass = g.m < 0 ? 'red' : 'green';
     
+    // Affichage des dates (Début et Fin sous chaque référence fixe)
+    const debTexte = formaterDateFr(g.debut || '2026-01');
+    const finTexte = g.fin ? formaterDateFr(g.fin) : 'Indéfinie';
+    const datesInfo = `Du ${debTexte} · Fin: ${finTexte}`;
+
+    // Affichage des modifications ponctuelles (exceptions)
     let modificationsHtml = '';
     if (g.exc) {
       const itemsModif = [];
       Object.keys(g.exc).forEach(k => {
         const ex = g.exc[k];
         if (ex && (ex.m !== undefined || ex.d !== undefined || ex.l !== undefined)) {
-          itemsModif.push(`<span style="display:inline-flex; align-items:center; gap:4px; background:rgba(255,255,255,0.06); padding:2px 6px; border-radius:6px; margin:2px 4px 2px 0;">Le ${k}: ${ex.m !== undefined ? eur(ex.m) : ''} <span onclick="event.stopPropagation(); supprimerModifExc(${origIndex}, '${k}')" style="cursor:pointer; color:var(--red); font-weight:bold; margin-left:2px;" title="Supprimer cette modification">✕</span></span>`);
+          itemsModif.push(`<span style="display:inline-flex; align-items:center; gap:4px; background:rgba(255,255,255,0.08); padding:2px 6px; border-radius:6px; margin:2px 4px 2px 0;">Le ${k}: ${ex.m !== undefined ? eur(ex.m) : ''} <span onclick="event.stopPropagation(); supprimerModifExc(${origIndex}, '${k}')" style="cursor:pointer; color:var(--red); font-weight:bold; margin-left:2px;" title="Supprimer cette modification">✕</span></span>`);
         }
       });
       if (itemsModif.length > 0) {
-        modificationsHtml = `<div style="font-size:0.7rem; color:var(--text-muted); margin-top:2px;">${itemsModif.join('')}</div>`;
+        modificationsHtml = `<div style="font-size:0.72rem; color:var(--text-muted); margin-top:3px;">${itemsModif.join('')}</div>`;
       }
     }
 
     return `<div class="op-item" onclick="ouvrirTpl(${origIndex})">
       <div class="op-info">
         <div class="op-label">${esc(g.l)} ${g.c?'🤝':''}</div>
-        <div class="op-sub">Chaque mois le ${g.jour || 1}</div>
+        <div class="op-sub">Chaque mois le ${g.jour || 1} (${datesInfo})</div>
         ${modificationsHtml}
       </div>
       <div class="op-right">
@@ -769,28 +793,6 @@ function supprimerModifExc(ruleIdx, k) {
     rendre();
     msg("Modification supprimée pour ce mois.");
   }
-}
-
-function mettreAJourRecurrencesFutures(idx) {
-  const g = S.regles[idx];
-  if (!g) return;
-  if (!isAdmin && g.u !== U) return msg("Non autorisé.");
-  
-  const nouveauMontant = Math.abs(parseFloat($('t-m').value));
-  if (isNaN(nouveauMontant)) return msg('Montant invalide.');
-  
-  const typeActuel = g.m < 0 ? -1 : 1;
-  g.m = typeActuel * nouveauMontant;
-  g.l = $('t-l').value.trim() || g.l;
-  g.jour = parseInt($('t-j').value) || g.jour;
-  g.debut = $('t-deb').value.trim() || g.debut;
-  g.fin = $('t-f').value || g.fin;
-  g.c = $('t-c').value === '1';
-
-  sauver();
-  fermer('m-tpl');
-  rendre();
-  msg("Référence mise à jour avec succès.");
 }
 
 function decaler(n){
@@ -921,7 +923,6 @@ function ouvrirTpl(idx){
     $('t-j').value = g.jour || 1;
     $('t-deb').value = g.debut || today().slice(0,7);
     $('t-f').value = g.fin || '';
-    $('t-refresh-btn').style.display = 'block';
     $('t-del-btn').style.display = 'block';
   } else {
     $('t-l').value = '';
@@ -931,7 +932,6 @@ function ouvrirTpl(idx){
     $('t-j').value = '1';
     $('t-deb').value = today().slice(0,7);
     $('t-f').value = '';
-    $('t-refresh-btn').style.display = 'none';
     $('t-del-btn').style.display = 'none';
   }
   ouvrirM('m-tpl');
@@ -961,11 +961,6 @@ function enregistrerTpl(){
   fermer('m-tpl');
   rendre();
   msg('Référence fixe enregistrée avec succès.');
-}
-
-function rafraichirRecurrencesTpl(){
-  if (ET === -1) return;
-  mettreAJourRecurrencesFutures(ET);
 }
 
 function supprimerTpl(){
