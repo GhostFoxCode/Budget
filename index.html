@@ -39,7 +39,7 @@ html,body{background:var(--bg);color:var(--text);width:100%;height:100%;overflow
 #net-status.online { background: #10b981; color: #fff; }
 
 header{padding:14px 20px;display:flex;justify-content:space-between;align-items:center;background:rgba(9,13,22,.9);border-bottom:1px solid var(--border);flex-shrink:0}
-.app-title{font-size:1.15rem;font-weight:800;background:linear-gradient(to right,#fff,#94a3b8);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.app-title{font-size:1.15rem;font-weight:800;background:linear-gradient(to right,#fff,#94a3b8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;cursor:pointer;user-select:none;}
 .user-selector{display:flex;background:rgba(15,23,42,.9);padding:3px;border-radius:12px;border:1px solid var(--border);cursor:pointer}
 .user-btn{padding:5px 12px;border-radius:9px;border:none;background:transparent;color:var(--text-muted);font-size:.78rem;font-weight:600;cursor:pointer}
 .user-btn.active{background:var(--accent-gradient);color:#fff}
@@ -108,8 +108,8 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
 <div class="app-frame">
  <div id="net-status">⚠️ Mode hors ligne - Vos données sont sauvegardées localement</div>
  <header>
-  <div class="app-title" id="header-title">Mes Comptes</div>
-  <div class="user-selector" id="seg" onclick="gererClicUserSelector()"></div>
+  <div class="app-title" id="header-title" onclick="gererClicTitreDemo()">Mes Comptes</div>
+  <div class="user-selector" id="seg"></div>
  </header>
  <main>
   <!-- SYNTHÈSE -->
@@ -266,8 +266,8 @@ const vide = () => ({
 let S = vide(), U = '2899de9f-a408-419b-aee1-c5f26980f2b4', T = 'synth', M = '', ED = '', ET = -1, RM = '', ROWS = {};
 const F = {deb:1, cre:1, men:1, pon:1, com:1, roll:1, eq:0};
 let isAdmin = false;
-let clickCount = 0;
-let clickTimer = null;
+let titleClickCount = 0;
+let titleClickTimer = null;
 let reinitClickCount = 0;
 
 const $ = id => document.getElementById(id);
@@ -301,14 +301,14 @@ function msg(t){
   msg.h = setTimeout(() => e.style.display = 'none', 4500);
 }
 
-function gererClicUserSelector() {
+function gererClicTitreDemo() {
   if (!isAdmin) return;
-  clickCount++;
-  clearTimeout(clickTimer);
-  clickTimer = setTimeout(() => { clickCount = 0; }, 2000);
+  titleClickCount++;
+  clearTimeout(titleClickTimer);
+  titleClickTimer = setTimeout(() => { titleClickCount = 0; }, 2000);
   
-  if (clickCount >= 10) {
-    clickCount = 0;
+  if (titleClickCount >= 10) {
+    titleClickCount = 0;
     U = (U === S.users[0].id) ? S.users[1].id : S.users[0].id;
     msg(`Vue basculée sur ${usr(U).nom}`);
     rendre();
@@ -682,8 +682,13 @@ function ligne(x, s, avecCoche = true){
 function rendre(){
   ROWS = {}; const t = today(); if (!M) M = t.slice(0,7);
   
-  // Affichage du sélecteur d'utilisateurs (les deux boutons apparaissent, celui actif est mis en valeur)
-  $('seg').innerHTML = S.users.map(u => `<button class="user-btn ${u.id===U?'active':''}" onclick="U='${u.id}';rendre()">${esc(u.nom)}</button>`).join('');
+  if (isAdmin) {
+    $('seg').innerHTML = S.users.map(u => `<button class="user-btn ${u.id===U?'active':''}" onclick="U='${u.id}';rendre()">${esc(u.nom)}</button>`).join('');
+  } else {
+    U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
+    const activeUser = usr(U);
+    $('seg').innerHTML = `<button class="user-btn active" style="cursor:default">${esc(activeUser.nom)}</button>`;
+  }
   
   for (const v of ['synth','detail','options']){
     $('tab-'+v).classList.toggle('hidden', v !== T);$('nav-'+v).classList.toggle('active', v === T);
