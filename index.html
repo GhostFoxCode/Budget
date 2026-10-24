@@ -269,7 +269,7 @@ let isAdmin = false;
 let titleClickCount = 0;
 let titleClickTimer = null;
 let reinitClickCount = 0;
-let demoUserLocked = false; // Verrouille l'utilisateur sélectionné en mode démonstration
+let demoUserLocked = false; 
 
 const $ = id => document.getElementById(id);
 const p2 = n => String(n).padStart(2,'0');
@@ -313,13 +313,9 @@ function gererClicTitreDemo() {
     demoUserLocked = !demoUserLocked;
     
     if (demoUserLocked) {
-      // Bascule sur l'autre utilisateur et verrouille la vue
-      U = (U === S.users[0].id) ? S.users[1].id : S.users[0].id;
-      msg(`🔒 Mode Démo Activé - Vue bloquée sur ${usr(U).nom}`);
+      msg(`🔒 Mode Démo Activé - Vue verrouillée sur ${usr(U).nom}`);
     } else {
-      // Revenir sur le compte principal
-      U = '2899de9f-a408-419b-aee1-c5f26980f2b4';
-      msg(`🔓 Mode Démo Désactivé - Compte principal ${usr(U).nom}`);
+      msg(`🔓 Mode Démo Désactivé - Verrouillage retiré`);
     }
     rendre();
   }
@@ -487,7 +483,6 @@ async function chargerCloud(silencieux = false){
     console.error('Erreur chargement cloud', e); 
   }
   
-  // Si on n'est pas admin et qu'aucun verrouillage démo n'est actif, forcer sur le compte utilisateur standard
   if (!isAdmin && !demoUserLocked) {
     U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
   }
@@ -698,15 +693,23 @@ function ligne(x, s, avecCoche = true){
 function rendre(){
   ROWS = {}; const t = today(); if (!M) M = t.slice(0,7);
   
-  // Affichage fixe du seul utilisateur actif pour un rendu propre sans clic parasite
-  const activeUser = usr(U);
-  $('seg').innerHTML = `<button class="user-btn active" style="cursor:default">${esc(activeUser.nom)}</button>`;
+  // Si admin et mode démo actif, afficher les deux boutons avec possibilité de basculer et de voir lequel est actif, sinon afficher le sélecteur standard ou bloqué
+  if (isAdmin && demoUserLocked) {
+    $('seg').innerHTML = S.users.map(u => `<button class="user-btn ${u.id===U?'active':''}" onclick="U='${u.id}';rendre()">${esc(u.nom)}</button>`).join('');
+  } else if (isAdmin) {
+    $('seg').innerHTML = S.users.map(u => `<button class="user-btn ${u.id===U?'active':''}" onclick="U='${u.id}';rendre()">${esc(u.nom)}</button>`).join('');
+  } else {
+    U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
+    const activeUser = usr(U);
+    $('seg').innerHTML = `<button class="user-btn active" style="cursor:default">${esc(activeUser.nom)}</button>`;
+  }
   
   for (const v of ['synth','detail','options']){
     $('tab-'+v).classList.toggle('hidden', v !== T);$('nav-'+v).classList.toggle('active', v === T);
   }
   synthese(t); detail();
   
+  const activeUser = usr(U);
   if (activeUser){ $('p-n').value = activeUser.nom; $('p-i').value = activeUser.init; }
 }
 
