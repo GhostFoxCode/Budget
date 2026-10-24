@@ -249,8 +249,9 @@ if ('caches' in window) {
   });
 }
 
-const SB_URL = 'https://spbqnbstlnczaensilge.supabase.co';
-const SB_KEY = 'sb_publishable_efoSjjwy88avztgJUwg1zA_op-pIFDd';
+// MISE À JOUR AVEC LES NOUVELLES CLÉS SUPABASE
+const SB_URL = 'https://owjsoiqpukflmfpjlbyz.supabase.co';
+const SB_KEY = 'sb_publishable_x3D526hO0y-6584s5Z26ZQ_E8hrDFRj';
 const supabaseClient = window.supabase.createClient(SB_URL, SB_KEY);
 
 const vide = () => ({
@@ -384,7 +385,7 @@ function gererSuccesSession(session) {
   $('auth-screen').classList.add('hidden');
   const email = (session.user.email || '').toLowerCase().trim();
   
-  // VÉRIFICATION STRICTE DES DEUX COMPTES SUPABASE AUTORISÉS
+  // VÉRIFICATION STRICTE DES DEUX COMPTES
   if (email === 'admin@budget.local') {
     isAdmin = true;
     U = '2899de9f-a408-419b-aee1-c5f26980f2b4'; // Compte Kévin
@@ -396,7 +397,6 @@ function gererSuccesSession(session) {
     chargerCloud();
   } 
   else {
-    // Si l'e-mail n'est ni l'un ni l'autre (ex: ancien compte supprimé), déconnexion immédiate
     seDeconnecter();
   }
 }
