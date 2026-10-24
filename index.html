@@ -171,7 +171,7 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
     <summary class="card-title" style="margin-bottom:0">🛠️ Options Développeur</summary>
     <div class="fm" style="margin-top:12px">
      <button class="btn-primary btn-ghost" style="color:var(--warning);background:rgba(245,158,11,0.15);margin-bottom:8px" onclick="reinitialiserCoches()">🔄 Tout décocher (Réinitialiser les coches)</button>
-     <button class="btn-primary btn-ghost" style="color:var(--red);background:rgba(244,63,94,0.15);margin-bottom:0" onclick="reinitialiserApplication()">🗑️ Réinitialiser l'application (Remettre à 0)</button>
+     <button class="btn-primary btn-ghost" id="btn-reinit-app" style="color:var(--red);background:rgba(244,63,94,0.15);margin-bottom:0" onclick="reinitialiserApplication()">🗑️ Réinitialiser l'application (10 clics requis)</button>
     </div>
    </details>
   </div>
@@ -246,6 +246,7 @@ const F = {deb:1, cre:1, men:1, pon:1, com:1, roll:1, eq:0};
 let isAdmin = false;
 let clickCount = 0;
 let clickTimer = null;
+let reinitClickCount = 0;
 
 const $ = id => document.getElementById(id);
 const p2 = n => String(n).padStart(2,'0');
@@ -372,12 +373,19 @@ async function seDeconnecter() {
 }
 
 function reinitialiserApplication() {
-  if (confirm("Voulez-vous vraiment tout effacer et remettre l'application à zéro ?")) {
-    localStorage.clear();
-    sessionStorage.clear();
-    alert("Application réinitialisée avec succès.");
-    location.reload();
+  reinitClickCount++;
+  const restants = 10 - reinitClickCount;
+  if (restants > 0) {
+    msg(`Encore ${restants} clic(s) pour confirmer la réinitialisation.`);
+    const btn = $('btn-reinit-app');
+    if (btn) btn.textContent = `🗑️ Réinitialiser l'application (${restants} restants)`;
+    return;
   }
+  
+  localStorage.clear();
+  sessionStorage.clear();
+  alert("Application réinitialisée avec succès.");
+  location.reload();
 }
 
 function reinitialiserCoches() {
@@ -669,10 +677,58 @@ function detail(){
   
   $('d-list').innerHTML = lignes.filter(ok).reverse().map(o => ligne(o.x, F.roll ? o.s : undefined, true)).join('') || '<p class="mu" style="text-align:center">Aucune opération</p>';
   
-  $('regles').innerHTML = S.regles.map((g, i) => g.u !== U ? '' : `<div class="op-item" onclick="ouvrirTpl(${i})">
-    <div class="op-info"><div class="op-label">${esc(g.l)} ${g.c?'🤝':''}</div><div class="op-sub">Chaque mois le ${g.jour || 1}</div></div>
-    <div class="op-right"><div class="op-amount ${g.m<0?'red':'green'}">${eur(g.m)}</div></div>
-  </div>`).join('') || '<p class="mu" style="text-align:center">Aucune référence.</p>';
+  $('regles').innerHTML = S.regles.map((g, i) => {
+    if (g.u !== U) return '';
+    const mClass = g.m < 0 ? 'red' : 'green';
+    return `<div class="op-item" onclick="ouvrirTpl(${i})">
+      <div class="op-info"><div class="op-label">${esc(g.l)} ${g.c?'🤝':''}</div><div class="op-sub">Chaque mois le ${g.jour || 1}</div></div>
+      <div class="op-right">
+        <button class="check-btn" onclick="event.stopPropagation(); mettreAJourRecurrencesFutures(${i})" title="Modifier les récurrences futures (garde le mois en cours)" style="background:rgba(245,158,11,0.15);color:var(--warning);border-color:rgba(245,158,11,0.3)">🔄</button>
+        <div class="op-amount ${mClass}">${eur(g.m)}</div>
+        <button class="del-btn" onclick="event.stopPropagation(); supprimerTplDirect(${i})" title="Supprimer cette référence">✕</button>
+      </div>
+    </div>`;
+  }).join('') || '<p class="mu" style="text-align:center">Aucune référence.</p>';
+}
+
+function mettreAJourRecurrencesFutures(idx) {
+  const g = S.regles[idx];
+  if (!g) return;
+  const nouveauMontantStr = prompt(`Modifier le montant de référence pour "${g.l}" (les mois futurs à partir du mois prochain seront mis à jour) :`, Math.abs(g.m));
+  if (nouveauMontantStr === null) return;
+  const val = parseFloat(nouveauMontantStr.replace(',', '.'));
+  if (isNaN(val)) return msg('Montant invalide.');
+  
+  const typeActuel = g.m < 0 ? -1 : 1;
+  g.m = typeActuel * val;
+  
+  const now = new Date();
+  const anneeCourante = now.getFullYear();
+  const moisCourant = now.getMonth() + 1;
+  const ymCourant = `${anneeCourante}-${p2(moisCourant)}`;
+  
+  g.debut = ymCourant;
+  
+  g.exc = g.exc || {};
+  Object.keys(g.exc).forEach(k => {
+    if (k <= ymCourant) {
+    } else {
+      delete g.exc[k];
+    }
+  });
+
+  sauver();
+  rendre();
+  msg('Récurrences futures mises à jour avec succès !');
+}
+
+function supprimerTplDirect(idx) {
+  if (confirm("Voulez-vous vraiment supprimer cette référence fixe ?")) {
+    S.regles.splice(idx, 1);
+    sauver();
+    rendre();
+    msg('Référence fixe supprimée.');
+  }
 }
 
 function decaler(n){
@@ -930,4 +986,3 @@ verifierSession();
 </script>
 </body>
 </html>
-```[cite: 1]
