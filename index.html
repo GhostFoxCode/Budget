@@ -742,9 +742,8 @@ function detail(){
   $('regles').innerHTML = reglesTriable.map(({ g, origIndex }) => {
     const mClass = g.m < 0 ? 'red' : 'green';
     
-    // Affichage uniquement de la date de fin sous chaque référence fixe
-    const finTexte = g.fin ? formaterDateFr(g.fin) : 'Indéfinie';
-    const datesInfo = `Fin: ${finTexte}`;
+    // Affichage conditionnel de la date de fin (masquée si indéfinie)
+    const datesInfo = g.fin ? ` (Fin: ${formaterDateFr(g.fin)})` : '';
 
     let modificationsHtml = '';
     if (g.exc) {
@@ -763,7 +762,7 @@ function detail(){
     return `<div class="op-item" onclick="ouvrirTpl(${origIndex})">
       <div class="op-info">
         <div class="op-label">${esc(g.l)} ${g.c?'🤝':''}</div>
-        <div class="op-sub">Chaque mois le ${g.jour || 1} (${datesInfo})</div>
+        <div class="op-sub">Chaque mois le ${g.jour || 1}${datesInfo}</div>
         ${modificationsHtml}
       </div>
       <div class="op-right">
