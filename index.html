@@ -151,7 +151,15 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
      <button class="btn-primary" onclick="saveParams()">Enregistrer les paramètres</button>
     </div>
    </details>
-   <details class="card"><summary class="card-title" style="margin-bottom:0;display:flex;justify-content:space-between;align-items:center;width:100%"><span>📌 Références fixes</span><button class="badge badge-success" onclick="event.preventDefault();ouvrirTpl(-1)">+ Ajouter modèle</button></summary><div style="margin-top:10px" id="regles"></div></details>
+
+   <!-- RÉFÉRENCES FIXES (AVEC SUMMARY ET BOUTON SÉPARÉS) -->
+   <details class="card">
+    <summary class="card-title" style="margin-bottom:0; display:flex; justify-content:space-between; align-items:center; width:100%;">
+      <span>📌 Références fixes</span>
+      <span class="badge badge-success" onclick="event.preventDefault(); event.stopPropagation(); ouvrirTpl(-1);">+ Ajouter modèle</span>
+    </summary>
+    <div style="margin-top:10px" id="regles"></div>
+   </details>
 
    <div class="card"><div class="card-title">Données Cloud / Sauvegarde</div>
     <button class="btn-primary btn-ghost" onclick="exporterJSON()">Exporter la sauvegarde JSON</button>
