@@ -443,7 +443,6 @@ function reinitialiserCoches() {
 async function chargerCloud(silencieux = false){
   if (!navigator.onLine) return;
   
-  // Bloque le chargement distant si une modale est ouverte pour éviter d'écraser la saisie en cours
   const modalOuverte = !$('m-op').classList.contains('hidden') || !$('m-tpl').classList.contains('hidden') || !$('m-reg').classList.contains('hidden');
   if (modalOuverte) return;
 
@@ -626,8 +625,15 @@ function mini(uid, ym){
   const mv = mouvementsTheoriques(uid, iso(fin));
   let s = usr(uid).init + somme(mv.filter(x => x.d < deb)), r = {s, d:deb};
   for (let j = new Date(y, m-1, 1); j <= fin; j.setDate(j.getDate()+1)){
-    s += somme(mv.filter(x => x.d === iso(j)));
-    if (s < r.s) r = {s, d:iso(j)};
+    const dateJour = iso(j);
+    const opsDuJour = mv.filter(x => x.d === dateJour);
+    // Traiter les crédits (+m) AVANT les débits (-m) pour ne pas fausser le solde mini le même jour
+    opsDuJour.sort((a, b) => b.m - a.m);
+    
+    for (const op of opsDuJour) {
+      s += op.m;
+      if (s < r.s) r = {s, d:dateJour};
+    }
   }
   return r;
 }
@@ -728,7 +734,7 @@ function synthese(t){
   
   $('prev').innerHTML = prev('Mois en cours', moisEnCoursNom, mini(U, t.slice(0,7))) + prev('Mois suivant', moisSuivantNom, mini(U, suiv));
   
-  $('dern').innerHTML = mouvementsTheoriques(U, t).sort((a, b) => b.d.localeCompare(a.d)).slice(0, 10).map(x => ligne(x, undefined, false)).join('') || '<p class="mu" style="text-align:center">Aucune opération</p>';
+  $('dern').innerHTML = mouvementsTheoriques(U, t).sort((a, b) => b.d.localeCompare(a.d) || b.m - a.m).slice(0, 10).map(x => ligne(x, undefined, false)).join('') || '<p class="mu" style="text-align:center">Aucune opération</p>';
   
   const reg = S.ops.find(o => o.reg === M), b = $('eqBadge');
   b.textContent = reg ? 'Validé' : 'Détails / Règlement'; b.className = 'badge ' + (reg ? 'badge-success' : 'badge-warning');
@@ -739,8 +745,12 @@ function detail(){
   $('mois').value = M;
   const tous = mouvementsTheoriques(U, M+'-31'), avant = usr(U).init + somme(tous.filter(x => x.d < M+'-01'));
   let s = avant;
-  const lignes = tous.filter(x => x.d.startsWith(M)).sort((a, b) => a.d.localeCompare(b.d))
+  
+  // Tri chronologique : d'abord par date, puis les crédits (+m) avant les débits (-m)
+  const lignes = tous.filter(x => x.d.startsWith(M))
+    .sort((a, b) => a.d.localeCompare(b.d) || b.m - a.m)
     .map(x => { s += x.m; return {x, s}; });
+    
   const ok = o => (o.x.m < 0 ? F.deb : F.cre) && (o.x.g ? F.men : F.pon) && (F.com || !o.x.c);
   $('detailEq').classList.toggle('hidden', !F.eq); $('detailEqText').textContent = commun(M).txt;
   
@@ -753,8 +763,6 @@ function detail(){
 
   $('regles').innerHTML = reglesTriable.map(({ g, origIndex }) => {
     const mClass = g.m < 0 ? 'red' : 'green';
-    
-    // Affichage uniquement de la date de fin (masquée si indéfinie)
     const datesInfo = g.fin ? ` (Fin: ${formaterDateFr(g.fin)})` : '';
 
     let modificationsHtml = '';
@@ -1039,7 +1047,7 @@ function exporterJSON(){
 
 function exporterCSV(){
   let csvContent = "Date;Utilisateur;Libelle;Montant (€);Type;Charge Commune\n";
-  const opsTriees = [...S.ops].sort((a,b) => b.d.localeCompare(a.d));
+  const opsTriees = [...S.ops].sort((a,b) => b.d.localeCompare(a.d) || b.m - a.m);
   
   opsTriees.forEach(o => {
     const uObj = usr(o.u);
