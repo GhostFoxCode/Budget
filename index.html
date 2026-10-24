@@ -659,7 +659,7 @@ function synthese(t){
   
   $('prev').innerHTML = prev('Mois en cours', moisEnCoursNom, mini(U, t.slice(0,7))) + prev('Mois suivant', moisSuivantNom, mini(U, suiv));
   
-  $('dern').innerHTML = mouvementsTheoriques(U, t).sort((a, b) => b.d.localeCompare(a.d)).slice(0, 10).map(x => ligne(x, undefined, false)).join('') || '<p class="mu" style="text-align:center">Aucune opération</p>';
+  $('dern').innerHTML = mouvementsTheoriques(U, t).sort((a, b) => b.d.localeCompare(b.d)).slice(0, 10).map(x => ligne(x, undefined, false)).join('') || '<p class="mu" style="text-align:center">Aucune opération</p>';
   
   const reg = S.ops.find(o => o.reg === M), b = $('eqBadge');
   b.textContent = reg ? 'Validé' : 'Détails / Règlement'; b.className = 'badge ' + (reg ? 'badge-success' : 'badge-warning');
@@ -677,8 +677,13 @@ function detail(){
   
   $('d-list').innerHTML = lignes.filter(ok).reverse().map(o => ligne(o.x, F.roll ? o.s : undefined, true)).join('') || '<p class="mu" style="text-align:center">Aucune opération</p>';
   
-  $('regles').innerHTML = S.regles.map((g, i) => {
-    if (g.u !== U) return '';
+  // Tri des références fixes par jour de déclenchement (du 1er au 31)
+  const reglesTriable = S.regles
+    .map((g, origIndex) => ({ g, origIndex }))
+    .filter(item => item.g.u === U)
+    .sort((a, b) => (a.g.jour || 1) - (b.g.jour || 1));
+
+  $('regles').innerHTML = reglesTriable.map(({ g, origIndex }) => {
     const mClass = g.m < 0 ? 'red' : 'green';
     
     let modificationsHtml = '';
@@ -687,15 +692,15 @@ function detail(){
       Object.keys(g.exc).forEach(k => {
         const ex = g.exc[k];
         if (ex && (ex.m !== undefined || ex.d !== undefined || ex.l !== undefined)) {
-          itemsModif.push(`<span style="display:inline-flex; align-items:center; gap:4px; background:rgba(255,255,255,0.06); padding:2px 6px; border-radius:6px; margin:2px 4px 2px 0;">Le ${k}: ${ex.m !== undefined ? eur(ex.m) : ''} <span onclick="event.stopPropagation(); supprimerModifExc(${i}, '${k}')" style="cursor:pointer; color:var(--red); font-weight:bold; margin-left:2px;" title="Supprimer cette modification">✕</span></span>`);
+          itemsModif.push(`<span style="display:inline-flex; align-items:center; gap:4px; background:rgba(255,255,255,0.06); padding:2px 6px; border-radius:6px; margin:2px 4px 2px 0;">Le ${k}: ${ex.m !== undefined ? eur(ex.m) : ''} <span onclick="event.stopPropagation(); supprimerModifExc(${origIndex}, '${k}')" style="cursor:pointer; color:var(--red); font-weight:bold; margin-left:2px;" title="Supprimer cette modification">✕</span></span>`);
         }
       });
       if (itemsModif.length > 0) {
-        modificationsHtml = `<div style="font-size:0.7rem; color:var(--text-muted); margin-top:4px;">Modifications de mois : ${itemsModif.join('')}</div>`;
+        modificationsHtml = `<div style="font-size:0.7rem; color:var(--text-muted); margin-top:4px;">${itemsModif.join('')}</div>`;
       }
     }
 
-    return `<div class="op-item" onclick="ouvrirTpl(${i})">
+    return `<div class="op-item" onclick="ouvrirTpl(${origIndex})">
       <div class="op-info">
         <div class="op-label">${esc(g.l)} ${g.c?'🤝':''}</div>
         <div class="op-sub">Chaque mois le ${g.jour || 1}</div>
