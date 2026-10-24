@@ -717,9 +717,10 @@ function detail(){
   
   $('d-list').innerHTML = lignes.filter(ok).reverse().map(o => ligne(o.x, F.roll ? o.s : undefined, true)).join('') || '<p class="mu" style="text-align:center">Aucune opération</p>';
   
+  // Filtrage strict : chaque utilisateur ne voit que ses propres références fixes
   const reglesTriable = S.regles
     .map((g, origIndex) => ({ g, origIndex }))
-    .filter(item => isAdmin || item.g.u === U)
+    .filter(item => item.g.u === U)
     .sort((a, b) => (a.g.jour || 1) - (b.g.jour || 1));
 
   $('regles').innerHTML = reglesTriable.map(({ g, origIndex }) => {
