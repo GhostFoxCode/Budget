@@ -158,12 +158,20 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
     <input type="file" accept=".json,application/json" onchange="lireFichier(this,importerJSON)">
    </div>
    
-   <!-- SESSION & DÉCONNEXION + RAZ -->
+   <!-- SESSION & DÉCONNEXION -->
    <div class="card">
     <div class="card-title">Session</div>
-    <button class="btn-primary btn-ghost" style="color:var(--red);margin-bottom:8px" onclick="seDeconnecter()">Se déconnecter</button>
-    <button class="btn-primary btn-ghost" style="color:var(--red);background:rgba(244,63,94,0.15);margin-bottom:0" onclick="reinitialiserApplication()">🗑️ Réinitialiser l'application (Remettre à 0)</button>
+    <button class="btn-primary btn-ghost" style="color:var(--red);margin-bottom:0" onclick="seDeconnecter()">Se déconnecter</button>
    </div>
+
+   <!-- OPTIONS DÉVELOPPEUR -->
+   <details class="card">
+    <summary class="card-title" style="margin-bottom:0">🛠️ Options Développeur</summary>
+    <div class="fm" style="margin-top:12px">
+     <button class="btn-primary btn-ghost" style="color:var(--warning);background:rgba(245,158,11,0.15);margin-bottom:8px" onclick="reinitialiserCoches()">🔄 Tout décocher (Réinitialiser les coches)</button>
+     <button class="btn-primary btn-ghost" style="color:var(--red);background:rgba(244,63,94,0.15);margin-bottom:0" onclick="reinitialiserApplication()">🗑️ Réinitialiser l'application (Remettre à 0)</button>
+    </div>
+   </details>
   </div>
  </main>
  <nav class="ios-nav">
@@ -368,6 +376,23 @@ function reinitialiserApplication() {
   }
 }
 
+// Fonction pour tout décocher (décompte et pointage)
+function reinitialiserCoches() {
+  if (confirm("Voulez-vous décocher toutes les opérations ?")) {
+    S.ops.forEach(o => o.checked = false);
+    S.regles.forEach(g => {
+      if (g.exc) {
+        Object.keys(g.exc).forEach(k => {
+          if (g.exc[k]) g.exc[k].checked = false;
+        });
+      }
+    });
+    sauver();
+    rendre();
+    msg("Toutes les opérations ont été décochées.");
+  }
+}
+
 async function chargerCloud(silencieux = false){
   if (navigator.onLine) {
     try {
@@ -464,8 +489,17 @@ window.addEventListener('focus', () => {
   verifierSession();
 });
 
-function brut(uid, hingga, seulementValide = false){
-  const r = S.ops.filter(o => o.u === uid && o.d <= hingga && (!seulementValide || o.c));
+function brut(uid, hingga, seulementNonCoche = false){
+  const r = [];
+  
+  // Traitement des opérations directes
+  S.ops.filter(o => o.u === uid && o.d <= hingga).forEach(o => {
+    if (!seulementNonCoche || !o.checked) {
+      r.push({u: o.u, d: o.d, l: o.l, m: o.m, c: o.c, checked: !!o.checked, opObj: o});
+    }
+  });
+
+  // Traitement des règles récurrentes
   for (const g of S.regles.filter(g => g.u === uid)){
     if (!g.debut) g.debut = '2026-01-01';
     const [y, m0] = g.debut.split('-').map(Number);
@@ -475,12 +509,18 @@ function brut(uid, hingga, seulementValide = false){
       if (d < g.debut) continue;
       const k = d.slice(0,7), e = g.exc && g.exc[k];
       if (e && e.skip) continue;
+      
       const dd = e && e.d ? e.d : d;
       const mm = e && e.m !== undefined ? e.m : g.m;
       const ll = e && e.l !== undefined ? e.l : g.l;
       const cc = e && e.c !== undefined ? e.c : g.c;
-      if (seulementValide && !cc) continue;
-      if (dd <= hingga) r.push({u:uid, d:dd, l:ll, m:mm, c:cc, g, k});
+      const isChecked = e && e.checked !== undefined ? e.checked : (g.checked || false);
+
+      if (seulementNonCoche && isChecked) continue;
+
+      if (dd <= hingga) {
+        r.push({u: uid, d: dd, l: ll, m: mm, c: cc, checked: isChecked, g, k});
+      }
     }
   }
   return r;
@@ -494,8 +534,8 @@ function commun(ym){
   return {p, tot, e, txt};
 }
 
-function projections(uid, hingga, seulementValide = false){
-  if (seulementValide) return []; // Les projections de charges sont théoriques
+function projections(uid, hingga, seulementNonCoche = false){
+  if (seulementNonCoche) return [];
   const n = new Date(), r = [];
   for (let i = 1; i <= 2; i++){
     const ym = iso(new Date(n.getFullYear(), n.getMonth()+i, 1)).slice(0,7), d = ym+'-12';
@@ -503,15 +543,15 @@ function projections(uid, hingga, seulementValide = false){
     const c = commun(ym); if (Math.abs(c.e) < .005) continue;
     const [du, cr] = c.e > 0 ? [1, 0] : [0, 1], a = Math.abs(c.e), debiteur = S.users[du].id === uid;
     if (!debiteur && S.users[cr].id !== uid) continue;
-    r.push({u:uid, d, l:'Règlement charges communes (projection)', m:debiteur ? -a : a, c:false, proj:true, k:ym});
+    r.push({u:uid, d, l:'Règlement charges communes (projection)', m:debiteur ? -a : a, c:false, checked:false, proj:true, k:ym});
   }
   return r;
 }
 
-// Mouvements réels validés (pour la banque / solde actuel)
+// Solde Banque : opérations NON cochées (en attente)
 const mouvementsBanque = (uid, j) => brut(uid, j, true);
 
-// Mouvements complets théoriques (pour la fin de mois estimée)
+// Solde Théorique : TOUTES les opérations (cochées et non cochées) + projections
 const mouvementsTheoriques = (uid, j) => brut(uid, j, false).concat(projections(uid, j, false));
 
 const soldeActuelBanque = (uid, date) => usr(uid).init + somme(mouvementsBanque(uid, date));
@@ -528,29 +568,32 @@ function mini(uid, ym){
   return r;
 }
 
-const cle = x => { const i = S.ops.indexOf(x); return i >= 0 ? 'o'+i : 'r'+S.regles.indexOf(x.g)+'|'+x.k; };
+const cle = x => { const i = S.ops.indexOf(x.opObj || x); return i >= 0 ? 'o'+i : 'r'+S.regles.indexOf(x.g)+'|'+x.k; };
 
 function toggleCheck(id, event) {
   event.stopPropagation();
   const x = ROWS[id];
   if (!x) return;
-  const i = S.ops.indexOf(x);
-  if (i >= 0) {
-    S.ops[i].c = !S.ops[i].c;
+  const opReal = x.opObj || S.ops.find(o => S.ops.indexOf(o) === +id.slice(1));
+  
+  if (opReal) {
+    opReal.checked = !opReal.checked;
   } else if (x.g) {
-    const rIdx = S.regles.indexOf(x.g);
     x.g.exc = x.g.exc || {};
     x.g.exc[x.k] = x.g.exc[x.k] || {};
-    x.g.exc[x.k].c = !(x.c);
+    x.g.exc[x.k].checked = !x.checked;
   }
   sauver();
   rendre();
 }
 
 function ligne(x, s){
-  const t = today(), i = S.ops.indexOf(x), id = x.proj ? 'p'+x.k : cle(x); ROWS[id] = x;
+  const t = today(), id = x.proj ? 'p'+x.k : cle(x); ROWS[id] = x;
+  const opReal = x.opObj || S.ops.find(o => S.ops.indexOf(o) === +id.slice(1));
+  const i = opReal ? S.ops.indexOf(opReal) : -1;
+  
   const del = x.proj ? '' : `<button class="del-btn" onclick="event.stopPropagation();${i>=0?`supprimer(${i})`:`retirer('${id}')`}">✕</button>`;
-  const checkboxHtml = x.proj ? '' : `<input type="checkbox" ${x.c ? 'checked' : ''} onclick="toggleCheck('${id}', event)" style="margin-right:8px; cursor:pointer;" title="Pointer / Valider l'opération">`;
+  const checkboxHtml = x.proj ? '' : `<input type="checkbox" ${x.checked ? 'checked' : ''} onclick="toggleCheck('${id}', event)" style="margin-right:8px; cursor:pointer;" title="Décompte solde banque">`;
   
   return `<div class="op-item ${x.d===t?'today-op':''}" style="${x.d>t?'opacity:.7':''}" onclick="${x.proj?`ouvrirReg('${x.k}')`:`ouvrir('${id}')`}">
    <div class="op-info">
@@ -584,9 +627,9 @@ function synthese(t){
   const [y, m] = t.split('-').map(Number), suiv = iso(new Date(y, m, 1)).slice(0,7);
   const box = (n, v) => `<div class="metric-box"><div class="metric-label">${n}</div><div class="metric-val ${v<0?'red':'green'}">${eur(v)}</div></div>`;
   
-  // Solde actuel = Banque (uniquement les opérations pointées/validées)
-  // Fin de mois estimé = Théorique complet (validées + en attente)
-  $('apercu').innerHTML = box('Solde actuel', soldeActuelBanque(U, t)) + box('Fin de mois estimé', soldeTheoriqueFinMois(U, iso(new Date(y, m, 0))));
+  // Solde Actuel / Banque = Uniquement les opérations non cochées
+  // Solde Théorique = Fin de mois estimé (toutes opérations)
+  $('apercu').innerHTML = box('Solde actuel (Banque)', soldeActuelBanque(U, t)) + box('Fin de mois estimé', soldeTheoriqueFinMois(U, iso(new Date(y, m, 0))));
   
   const prev = (n, r) => `<div class="metric-box"><div class="metric-label" style="font-weight:700;color:var(--text)">${n}</div>
     <div class="mu" style="margin-top:4px">Mini : <span class="${r.s<0?'red':''}" style="color:var(--text)">${eur(r.s)}</span></div></div>`;
@@ -638,7 +681,7 @@ function ouvrir(id){
   $('f-l').value = x ? x.l : ''; $('f-m').value = x ? Math.abs(x.m) : '';
   $('f-t').value = x && x.m > 0 ? '1' : '-1'; $('f-c').value = x && x.c ? '1' : '0';
   $('f-d').value = x ? x.d : today(); 
-  $('f-coore').checked = x ? !!x.c : false; // Par défaut non cochée si nouvelle opération
+  $('f-coore').checked = x ? !!x.checked : false; // Par défaut décoché
   $('f-rbox').classList.toggle('hidden', !!ED);
   ouvrirM('m-op');
 }
@@ -650,15 +693,16 @@ function enregistrer(){
   
   if (ED) {
     const x = ROWS[ED];
-    const i = S.ops.indexOf(x);
-    if (i >= 0) {
-      S.ops[i].l = l;
-      S.ops[i].m = sg * v;
-      S.ops[i].d = d;
-      S.ops[i].c = checkedState;
+    const opReal = x.opObj || S.ops.find(o => S.ops.indexOf(o) === +ED.slice(1));
+    if (opReal) {
+      opReal.l = l;
+      opReal.m = sg * v;
+      opReal.d = d;
+      opReal.c = c;
+      opReal.checked = checkedState;
     }
   } else {
-    S.ops.push({u:U, l, m: sg * v, d, c: checkedState});
+    S.ops.push({u:U, l, m: sg * v, d, c, checked: checkedState});
   }
   sauver(); fermer('m-op'); rendre();
 }
@@ -712,7 +756,7 @@ function enregistrerTpl(){
 
   if (!l || isNaN(mVal)) return msg('Veuillez remplir le libellé et le montant.');
 
-  const newData = { u: U, l, m: sg * mVal, jour, debut, fin: fin || undefined, c: false, exc: {} };
+  const newData = { u: U, l, m: sg * mVal, jour, debut, fin: fin || undefined, c, checked: false, exc: {} };
 
   if (ET === -1) {
     S.regles.push(newData);
@@ -745,6 +789,7 @@ function rafraichirRecurrencesTpl(){
   g.debut = debut;
   g.fin = fin || undefined;
   g.c = c;
+  g.checked = false;
   g.exc = {};
 
   sauver();
@@ -775,8 +820,8 @@ function validerReg(){
   S.ops = S.ops.filter(o => o.reg !== RM);
   if (Math.abs(c.e) >= .005){
     const [du, cr] = c.e > 0 ? [1, 0] : [0, 1], a = Math.abs(c.e);
-    S.ops.push({u:S.users[du].id, l:'Règlement charges', m:-a, d, c:false, reg:RM});
-    S.ops.push({u:S.users[cr].id, l:'Règlement charges', m:a, d, c:false, reg:RM});
+    S.ops.push({u:S.users[du].id, l:'Règlement charges', m:-a, d, c:false, checked:false, reg:RM});
+    S.ops.push({u:S.users[cr].id, l:'Règlement charges', m:a, d, c:false, checked:false, reg:RM});
   }
   sauver(); fermer('m-reg'); rendre();
 }
