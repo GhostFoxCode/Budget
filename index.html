@@ -269,6 +269,7 @@ let isAdmin = false;
 let titleClickCount = 0;
 let titleClickTimer = null;
 let reinitClickCount = 0;
+let demoUserLocked = false; // Verrouille l'utilisateur sélectionné en mode démonstration
 
 const $ = id => document.getElementById(id);
 const p2 = n => String(n).padStart(2,'0');
@@ -309,8 +310,17 @@ function gererClicTitreDemo() {
   
   if (titleClickCount >= 10) {
     titleClickCount = 0;
-    U = (U === S.users[0].id) ? S.users[1].id : S.users[0].id;
-    msg(`Vue basculée sur ${usr(U).nom}`);
+    demoUserLocked = !demoUserLocked;
+    
+    if (demoUserLocked) {
+      // Bascule sur l'autre utilisateur et verrouille la vue
+      U = (U === S.users[0].id) ? S.users[1].id : S.users[0].id;
+      msg(`🔒 Mode Démo Activé - Vue bloquée sur ${usr(U).nom}`);
+    } else {
+      // Revenir sur le compte principal
+      U = '2899de9f-a408-419b-aee1-c5f26980f2b4';
+      msg(`🔓 Mode Démo Désactivé - Compte principal ${usr(U).nom}`);
+    }
     rendre();
   }
 }
@@ -370,7 +380,9 @@ function gererSuccesSession(session) {
   
   if (email === 'admin@budget.local') {
     isAdmin = true;
-    U = '2899de9f-a408-419b-aee1-c5f26980f2b4';
+    if (!demoUserLocked) {
+      U = '2899de9f-a408-419b-aee1-c5f26980f2b4';
+    }
     chargerCloud();
   } else if (email === 'prescillia@budget.local') {
     isAdmin = false;
@@ -474,7 +486,11 @@ async function chargerCloud(silencieux = false){
   } catch(e){ 
     console.error('Erreur chargement cloud', e); 
   }
-  if (!isAdmin) U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
+  
+  // Si on n'est pas admin et qu'aucun verrouillage démo n'est actif, forcer sur le compte utilisateur standard
+  if (!isAdmin && !demoUserLocked) {
+    U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
+  }
 }
 
 async function sauver(){
@@ -682,20 +698,15 @@ function ligne(x, s, avecCoche = true){
 function rendre(){
   ROWS = {}; const t = today(); if (!M) M = t.slice(0,7);
   
-  if (isAdmin) {
-    $('seg').innerHTML = S.users.map(u => `<button class="user-btn ${u.id===U?'active':''}" onclick="U='${u.id}';rendre()">${esc(u.nom)}</button>`).join('');
-  } else {
-    U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
-    const activeUser = usr(U);
-    $('seg').innerHTML = `<button class="user-btn active" style="cursor:default">${esc(activeUser.nom)}</button>`;
-  }
+  // Affichage fixe du seul utilisateur actif pour un rendu propre sans clic parasite
+  const activeUser = usr(U);
+  $('seg').innerHTML = `<button class="user-btn active" style="cursor:default">${esc(activeUser.nom)}</button>`;
   
   for (const v of ['synth','detail','options']){
     $('tab-'+v).classList.toggle('hidden', v !== T);$('nav-'+v).classList.toggle('active', v === T);
   }
   synthese(t); detail();
   
-  const activeUser = usr(U);
   if (activeUser){ $('p-n').value = activeUser.nom; $('p-i').value = activeUser.init; }
 }
 
