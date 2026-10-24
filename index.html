@@ -313,9 +313,9 @@ function gererClicTitreDemo() {
     demoUserLocked = !demoUserLocked;
     
     if (demoUserLocked) {
-      msg(`🔒 Mode Démo Activé - Profil figé sur ${usr(U).nom}`);
+      msg(`🔒 Mode Démo Activé - Bloqué sur ${usr(U).nom}`);
     } else {
-      msg(`🔓 Mode Démo Désactivé - Sélecteur libéré`);
+      msg(`🔓 Mode Démo Désactivé - Sélecteur rétabli`);
     }
     rendre();
   }
@@ -693,8 +693,11 @@ function ligne(x, s, avecCoche = true){
 function rendre(){
   ROWS = {}; const t = today(); if (!M) M = t.slice(0,7);
   
-  // Affichage du sélecteur : En mode normal ou démo activé, on laisse les deux boutons de switch disponibles pour basculer à tout moment. Si verrouillé en mode démo, seul le bouton actif est mis en valeur mais les deux restent cliquables si l'admin le souhaite, ou l'utilisateur garde son choix figé.
-  if (isAdmin || demoUserLocked) {
+  // ICI : Si mode démo verrouillé, on affiche uniquement le bouton du user bloqué. Sinon, les deux boutons normaux.
+  if (demoUserLocked) {
+    const activeUser = usr(U);
+    $('seg').innerHTML = `<button class="user-btn active" style="cursor:default">${esc(activeUser.nom)} (Bloqué)</button>`;
+  } else if (isAdmin) {
     $('seg').innerHTML = S.users.map(u => `<button class="user-btn ${u.id===U?'active':''}" onclick="U='${u.id}';rendre()">${esc(u.nom)}</button>`).join('');
   } else {
     U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
