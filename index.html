@@ -168,10 +168,15 @@
       <!-- BLOC RESET DANGER ZONE -->
       <div class="card-danger">
         <h4 style="color: var(--danger); margin-top:0;">⚠️ Zone de Reset</h4>
-        <p>Si tu veux remettre l'application entièrement à zéro pendant tes tests :</p>
-        <button class="btn-danger" onclick="reinitialiserApplication()">
-          🗑️ Réinitialiser l'application (Remettre à 0)
-        </button>
+        <p>Remise à zéro complète de l'application ou effacement des opérations :</p>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <button class="btn-danger" onclick="reinitialiserApplication()">
+            🗑️ Réinitialiser l'application (Remettre à 0)
+          </button>
+          <button class="btn-danger" onclick="effacerToutesLesOperations()" style="background-color: #991b1b;">
+            🧹 Effacer toutes les opérations
+          </button>
+        </div>
       </div>
 
       <!-- BLOC IMPORTATION JSON -->
@@ -295,6 +300,16 @@
         sessionStorage.clear();
         alert("L'application a été réinitialisée !");
         window.location.reload();
+      }
+    }
+
+    // --- FONCTION EFFACER TOUTES LES OPÉRATIONS ---
+    function effacerToutesLesOperations() {
+      if (confirm("Voulez-vous vraiment effacer TOUTES les opérations de tous les utilisateurs ?")) {
+        budgetData.ops = [];
+        sauvegarderDonnees();
+        rafraichirInterface();
+        alert("Toutes les opérations ont été effacées avec succès.");
       }
     }
 
