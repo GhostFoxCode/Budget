@@ -99,7 +99,7 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
       <label>Mot de passe
         <input type="password" id="auth-pass" placeholder="••••••••">
       </label>
-      <button class="btn-primary" onclick="seConnecter()">Se connecter</button>
+      <button class="btn-primary" type="button" onclick="seConnecter()">Se connecter</button>
       <div id="auth-error"></div>
     </div>
   </div>
@@ -237,15 +237,11 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
 
 <script>
 if ('serviceWorker' in navigator) {
-  const swCode = `
-    self.addEventListener('install', e => self.skipWaiting());
-    self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
-    self.addEventListener('fetch', e => {
-      e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
-    });
-  `;
-  const blob = new Blob([swCode], { type: 'text/javascript' });
-  navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(() => {});
+  navigator.serviceWorker.getRegistrations().then(registrations => {
+    for(let registration of registrations) {
+      registration.unregister();
+    }
+  });
 }
 
 const SB_URL = 'https://spbqnbstlnczaensilge.supabase.co';
@@ -379,13 +375,13 @@ function verifierSessionLocale() {
   let hasSupabaseSession = false;
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
+    if (key && (key.startsWith('sb-') || key.includes('supabase')) && key.endsWith('-auth-token')) {
       hasSupabaseSession = true;
       break;
     }
   }
   
-  if (hasSupabaseSession || localStorage.getItem('mon_budget_local_data')) {
+  if (hasSupabaseSession) {
     $('auth-screen').classList.add('hidden');
     isAdmin = true;
     U = '2899de9f-a408-419b-aee1-c5f26980f2b4';
@@ -423,20 +419,16 @@ async function seConnecter() {
 }
 
 function seDeconnecter() {
-  try {
-    if (navigator.onLine) {
-      supabaseClient.auth.signOut().catch(() => {});
-    }
-  } catch(e) {}
-  
-  for (let i = localStorage.length - 1; i >= 0; i--) {
-    const key = localStorage.key(i);
-    if (key && (key.startsWith('sb-') || key.includes('supabase'))) {
-      localStorage.removeItem(key);
-    }
-  }
+  localStorage.clear();
   sessionStorage.clear();
-  location.reload();
+  
+  if (navigator.onLine) {
+    supabaseClient.auth.signOut().finally(() => {
+      window.location.reload();
+    });
+  } else {
+    window.location.reload();
+  }
 }
 
 function reinitialiserApplication() {
