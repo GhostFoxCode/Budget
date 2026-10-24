@@ -269,7 +269,13 @@ let isAdmin = false;
 let titleClickCount = 0;
 let titleClickTimer = null;
 let reinitClickCount = 0;
-let demoUserLocked = false; 
+
+// Récupération de l'état du mode démo depuis localStorage pour survivre aux refreshs
+let demoUserLocked = localStorage.getItem('demo_locked') === 'true';
+if (demoUserLocked) {
+  const savedUser = localStorage.getItem('demo_user_id');
+  if (savedUser) U = savedUser;
+}
 
 const $ = id => document.getElementById(id);
 const p2 = n => String(n).padStart(2,'0');
@@ -313,8 +319,12 @@ function gererClicTitreDemo() {
     demoUserLocked = !demoUserLocked;
     
     if (demoUserLocked) {
-      msg(`🔒 Mode Démo Activé - Bloqué sur ${usr(U).nom}`);
+      localStorage.setItem('demo_locked', 'true');
+      localStorage.setItem('demo_user_id', U);
+      msg(`🔒 Mode Démo Activé - Figé sur ${usr(U).nom}`);
     } else {
+      localStorage.removeItem('demo_locked');
+      localStorage.removeItem('demo_user_id');
       msg(`🔓 Mode Démo Désactivé - Sélecteur rétabli`);
     }
     rendre();
@@ -693,10 +703,10 @@ function ligne(x, s, avecCoche = true){
 function rendre(){
   ROWS = {}; const t = today(); if (!M) M = t.slice(0,7);
   
-  // ICI : Si mode démo verrouillé, on affiche uniquement le bouton du user bloqué. Sinon, les deux boutons normaux.
+  // Si mode démo actif : affichage d'un seul bouton simple avec le nom du user (sans mention "bloqué")
   if (demoUserLocked) {
     const activeUser = usr(U);
-    $('seg').innerHTML = `<button class="user-btn active" style="cursor:default">${esc(activeUser.nom)} (Bloqué)</button>`;
+    $('seg').innerHTML = `<button class="user-btn active" style="cursor:default">${esc(activeUser.nom)}</button>`;
   } else if (isAdmin) {
     $('seg').innerHTML = S.users.map(u => `<button class="user-btn ${u.id===U?'active':''}" onclick="U='${u.id}';rendre()">${esc(u.nom)}</button>`).join('');
   } else {
