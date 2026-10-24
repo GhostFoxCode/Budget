@@ -236,7 +236,6 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
 <div id="toast"></div>
 
 <script>
-// FORCE LA SUPPRESSION DE TOUT CACHE SERVICE WORKER AU DÉMARRAGE
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then(registrations => {
     for(let registration of registrations) {
@@ -378,7 +377,6 @@ async function verifierSession() {
 }
 
 function verifierSessionLocale() {
-  // Exige STRICTEMENT une validation de session active de Supabase
   $('auth-screen').classList.remove('hidden');
 }
 
@@ -386,35 +384,34 @@ function gererSuccesSession(session) {
   $('auth-screen').classList.add('hidden');
   const email = (session.user.email || '').toLowerCase().trim();
   
-  // ADMIN : admin@budget.local
-  if (email === 'admin@budget.local' || email.includes('admin') || email.includes('kevin')) {
+  // VÉRIFICATION STRICTE DES DEUX COMPTES SUPABASE AUTORISÉS
+  if (email === 'admin@budget.local') {
     isAdmin = true;
-    U = '2899de9f-a408-419b-aee1-c5f26980f2b4'; // Compte Kévin par défaut
+    U = '2899de9f-a408-419b-aee1-c5f26980f2b4'; // Compte Kévin
+    chargerCloud();
   } 
-  // PRESCILLIA : prescillia@budget.local STRICT
   else if (email === 'prescillia@budget.local') {
     isAdmin = false;
     U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0'; // Compte Prescillia
+    chargerCloud();
   } 
-  // TOUT AUTRE EMAIL NON RECONNU BLOQUE ET DÉCONNECTE
   else {
+    // Si l'e-mail n'est ni l'un ni l'autre (ex: ancien compte supprimé), déconnexion immédiate
     seDeconnecter();
-    return;
   }
-  
-  chargerCloud();
 }
 
 async function seConnecter() {
   const email = $('auth-email').value.trim();
   const password = $('auth-pass').value;
   const errorEl = $('auth-error');
-  errorEl.textContent = '';
+  errorEl.textContent = 'Connexion en cours...';
 
   const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
   if (error) {
     errorEl.textContent = "Identifiant ou mot de passe incorrect.";
   } else {
+    errorEl.textContent = '';
     verifierSession();
   }
 }
