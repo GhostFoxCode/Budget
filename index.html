@@ -220,6 +220,7 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
   <label>Mois de début (AAAA-MM)<input type="text" id="t-deb" placeholder="Ex: 2026-01"></label>
   <label>Date de fin (optionnel)<input type="date" id="t-f"></label>
   <button class="btn-primary" onclick="enregistrerTpl()">Sauvegarder</button>
+  <button class="btn-primary btn-ghost" id="t-refresh-btn" onclick="rafraichirRecurrencesTpl()" style="display:none;background:var(--warning);color:#000;margin-top:4px">🔄 Appliquer la modification (M+1 et suivants)</button>
   <button class="btn-primary btn-ghost" id="t-del-btn" onclick="supprimerTpl()" style="display:none;color:var(--red);margin-top:4px">Supprimer cette référence</button>
  </div>
 </div></div>
@@ -542,7 +543,6 @@ function brut(uid, hingga, seulementNonCoche = false){
     }
   });
 
-  // Pour s'assurer qu'on couvre bien jusqu me jusqu'à +12 mois par rapport à aujourd'hui
   const now = new Date();
   const maxHorizonIso = iso(new Date(now.getFullYear(), now.getMonth() + 12, 31));
   const dateLimiteFinale = hingga > maxHorizonIso ? hingga : maxHorizonIso;
@@ -557,7 +557,6 @@ function brut(uid, hingga, seulementNonCoche = false){
     for (let m = m0 - 1; ; m++){
       const d = safeDateIso(y, m, g.jour || 1);
       
-      // On s'arrête si la date dépasse la limite demandée
       if (d > dateLimiteFinale || (g.fin && d > g.fin)) break;
       if (d < debStr) continue;
       
@@ -735,7 +734,6 @@ function detail(){
   
   $('d-list').innerHTML = lignes.filter(ok).reverse().map(o => ligne(o.x, F.roll ? o.s : undefined, true)).join('') || '<p class="mu" style="text-align:center">Aucune opération</p>';
   
-  // Filtrage strict : chaque utilisateur ne voit que ses propres références fixes
   const reglesTriable = S.regles
     .map((g, origIndex) => ({ g, origIndex }))
     .filter(item => item.g.u === U)
@@ -744,12 +742,10 @@ function detail(){
   $('regles').innerHTML = reglesTriable.map(({ g, origIndex }) => {
     const mClass = g.m < 0 ? 'red' : 'green';
     
-    // Affichage des dates (Début et Fin sous chaque référence fixe)
-    const debTexte = formaterDateFr(g.debut || '2026-01');
+    // Affichage uniquement de la date de fin sous chaque référence fixe
     const finTexte = g.fin ? formaterDateFr(g.fin) : 'Indéfinie';
-    const datesInfo = `Du ${debTexte} · Fin: ${finTexte}`;
+    const datesInfo = `Fin: ${finTexte}`;
 
-    // Affichage des modifications ponctuelles (exceptions)
     let modificationsHtml = '';
     if (g.exc) {
       const itemsModif = [];
@@ -793,6 +789,28 @@ function supprimerModifExc(ruleIdx, k) {
     rendre();
     msg("Modification supprimée pour ce mois.");
   }
+}
+
+function mettreAJourRecurrencesFutures(idx) {
+  const g = S.regles[idx];
+  if (!g) return;
+  if (!isAdmin && g.u !== U) return msg("Non autorisé.");
+  
+  const nouveauMontant = Math.abs(parseFloat($('t-m').value));
+  if (isNaN(nouveauMontant)) return msg('Montant invalide.');
+  
+  const typeActuel = g.m < 0 ? -1 : 1;
+  g.m = typeActuel * nouveauMontant;
+  g.l = $('t-l').value.trim() || g.l;
+  g.jour = parseInt($('t-j').value) || g.jour;
+  g.debut = $('t-deb').value.trim() || g.debut;
+  g.fin = $('t-f').value || g.fin;
+  g.c = $('t-c').value === '1';
+
+  sauver();
+  fermer('m-tpl');
+  rendre();
+  msg("Référence mise à jour avec succès.");
 }
 
 function decaler(n){
@@ -923,6 +941,7 @@ function ouvrirTpl(idx){
     $('t-j').value = g.jour || 1;
     $('t-deb').value = g.debut || today().slice(0,7);
     $('t-f').value = g.fin || '';
+    $('t-refresh-btn').style.display = 'block';
     $('t-del-btn').style.display = 'block';
   } else {
     $('t-l').value = '';
@@ -932,7 +951,8 @@ function ouvrirTpl(idx){
     $('t-j').value = '1';
     $('t-deb').value = today().slice(0,7);
     $('t-f').value = '';
-    $('t-del-btn').style.display = 'none';
+    $('t-refresh-btn').style.display = 'none';
+    $('t-del-btn').style.display = 'block';
   }
   ouvrirM('m-tpl');
 }
@@ -961,6 +981,11 @@ function enregistrerTpl(){
   fermer('m-tpl');
   rendre();
   msg('Référence fixe enregistrée avec succès.');
+}
+
+function rafraichirRecurrencesTpl(){
+  if (ET === -1) return;
+  mettreAJourRecurrencesFutures(ET);
 }
 
 function supprimerTpl(){
