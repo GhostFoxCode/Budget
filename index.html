@@ -313,7 +313,7 @@ function gererClicTitreDemo() {
     demoUserLocked = !demoUserLocked;
     
     if (demoUserLocked) {
-      msg(`🔒 Mode Démo Activé - Vue verrouillée sur ${usr(U).nom}`);
+      msg(`🔒 Mode Démo Activé - Profil figé sur ${usr(U).nom}`);
     } else {
       msg(`🔓 Mode Démo Désactivé - Verrouillage retiré`);
     }
@@ -693,10 +693,8 @@ function ligne(x, s, avecCoche = true){
 function rendre(){
   ROWS = {}; const t = today(); if (!M) M = t.slice(0,7);
   
-  // Si admin et mode démo actif, afficher les deux boutons avec possibilité de basculer et de voir lequel est actif, sinon afficher le sélecteur standard ou bloqué
-  if (isAdmin && demoUserLocked) {
-    $('seg').innerHTML = S.users.map(u => `<button class="user-btn ${u.id===U?'active':''}" onclick="U='${u.id}';rendre()">${esc(u.nom)}</button>`).join('');
-  } else if (isAdmin) {
+  // Affichage dynamique des boutons de sélection de profils (Kévin / Prescillia)
+  if (isAdmin || demoUserLocked) {
     $('seg').innerHTML = S.users.map(u => `<button class="user-btn ${u.id===U?'active':''}" onclick="U='${u.id}';rendre()">${esc(u.nom)}</button>`).join('');
   } else {
     U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
