@@ -1,1 +1,691 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mes Comptes - Sécurisé</title>
 
+<!-- Configuration WebApp Plein Écran -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#090d16">
+
+<!-- Supabase JS -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+:root{--bg:#090d16;--card-bg:rgba(30,41,59,.75);--border:rgba(255,255,255,.08);--text:#f8fafc;--text-muted:#94a3b8;--accent:#6366f1;--accent-gradient:linear-gradient(135deg,#6366f1 0%,#a855f7 100%);--green:#10b981;--red:#f43f5e;--warning:#f59e0b;--radius:20px;
+ box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--bg);color:var(--text);width:100%;height:100%;overflow:hidden}
+
+/* Écran de connexion */
+#auth-screen{position:absolute;top:0;left:0;width:100%;height:100%;background:var(--bg);display:flex;justify-content:center;align-items:center;z-index:999;padding:20px}
+.login-card{background:var(--card-bg);border:1px solid var(--border);padding:24px;border-radius:var(--radius);width:100%;max-width:380px;box-shadow:0 10px 25px rgba(0,0,0,0.5)}
+.login-title{font-size:1.4rem;font-weight:800;text-align:center;margin-bottom:20px;background:linear-gradient(to right,#fff,#94a3b8);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+
+.app-frame{width:100%;max-width:430px;height:100%;margin:0 auto;background:rgba(9,13,22,.95);display:flex;flex-direction:column;position:relative}
+
+/* Bandeau statut réseau */
+#net-status {
+  position: absolute; top: 0; left: 0; right: 0;
+  background: #f59e0b; color: #000; text-align: center;
+  padding: 6px 12px; font-size: 0.78rem; font-weight: 700;
+  z-index: 1000; transition: transform 0.3s ease; transform: translateY(-100%);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+#net-status.show { transform: translateY(0); }
+#net-status.online { background: #10b981; color: #fff; }
+
+header{padding:14px 20px;display:flex;justify-content:space-between;align-items:center;background:rgba(9,13,22,.9);border-bottom:1px solid var(--border);flex-shrink:0}
+.app-title{font-size:1.15rem;font-weight:800;background:linear-gradient(to right,#fff,#94a3b8);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.user-selector{display:flex;background:rgba(15,23,42,.9);padding:3px;border-radius:12px;border:1px solid var(--border);cursor:pointer}
+.user-btn{padding:5px 12px;border-radius:9px;border:none;background:transparent;color:var(--text-muted);font-size:.78rem;font-weight:600;cursor:pointer}
+.user-btn.active{background:var(--accent-gradient);color:#fff}
+main{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:10px;padding-bottom:110px}
+.tab{display:flex;flex-direction:column;gap:10px}
+.card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
+.card-title{font-size:.78rem;font-weight:700;color:var(--text-muted);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;text-transform:uppercase;letter-spacing:.5px}
+.metrics-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.metric-box{background:rgba(15,23,42,.6);border:1px solid var(--border);padding:10px 12px;border-radius:14px}
+.metric-label{font-size:.72rem;color:var(--text-muted)}.metric-val{font-size:1.1rem;font-weight:800;margin-top:4px}
+.green{color:var(--green)}.red{color:var(--red)}
+.btn-primary{width:100%;background:var(--accent-gradient);color:#fff;border:none;padding:12px;border-radius:14px;font-weight:700;font-size:.9rem;cursor:pointer;box-shadow:0 4px 15px rgba(99,102,241,.3)}
+.btn-ghost{background:rgba(255,255,255,.08);box-shadow:none;margin-bottom:8px}
+.badge{display:inline-block;padding:4px 8px;border-radius:6px;font-size:.72rem;font-weight:600;cursor:pointer;border:0}
+.badge-warning{background:rgba(245,158,11,.15);color:var(--warning);border:1px solid rgba(245,158,11,.3)}
+.badge-success{background:rgba(34,197,94,.15);color:var(--green);border:1px solid rgba(34,197,94,.3)}
+.op-item{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;margin-bottom:4px;border-radius:10px;border-bottom:1px solid var(--border);cursor:pointer}
+.op-item:last-child{border-bottom:none;margin-bottom:0}
+.op-item.today-op{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.5);box-shadow:0 0 10px rgba(245,158,11,.15)}
+.op-info{display:flex;flex-direction:column;gap:2px}
+.op-label{font-weight:600;font-size:.88rem;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.op-sub{font-size:.7rem;color:var(--text-muted)}
+.op-right{display:flex;align-items:center;gap:8px}
+.op-amount{font-weight:700;font-size:.9rem;white-space:nowrap}
+.del-btn{color:var(--text-muted);font-size:.85rem;border:none;background:rgba(255,255,255,.06);width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
+nav.ios-nav{position:absolute;bottom:0;left:0;width:100%;background:rgba(15,23,42,.95);backdrop-filter:blur(15px);border-top:1px solid rgba(255,255,255,.1);display:flex;justify-content:space-around;padding:10px 0 16px;z-index:100}
+.nav-item{border:none;background:transparent;color:var(--text-muted);display:flex;flex-direction:column;align-items:center;gap:3px;font-size:.68rem;font-weight:600;cursor:pointer;width:33%}
+.nav-item svg{width:20px;height:20px;fill:currentColor}.nav-item.active{color:#818cf8}
+.modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.7);backdrop-filter:blur(6px);display:flex;justify-content:center;align-items:flex-end;z-index:200}
+.modal-content{background:#111827;border-top-left-radius:24px;border-top-right-radius:24px;padding:20px 20px calc(20px + env(safe-area-inset-bottom,0px));width:100%;max-width:430px;max-height:88vh;overflow-y:auto;border:1px solid var(--border)}
+.hidden{display:none!important}
+.fm{display:flex;flex-direction:column;gap:12px;margin-top:10px}
+label{font-size:.78rem;color:var(--text-muted);display:flex;flex-direction:column;gap:4px;font-weight:500}
+label.row{flex-direction:row;align-items:center;gap:8px;color:var(--text)}
+input,select,textarea{background:rgba(15,23,42,.9);border:1px solid var(--border);border-radius:12px;padding:11px;color:var(--text);font-size:.92rem;width:100%;outline:none}
+input[type="date"], input[type="month"] { color-scheme: dark; }
+input[type=checkbox]{width:16px;height:16px}
+details{background:rgba(15,23,42,.2);border:1px solid var(--border);border-radius:12px;padding:10px 14px;margin-bottom:8px}
+summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outline:none}
+.mu{font-size:.78rem;color:var(--text-muted)}
+#toast{position:fixed;left:16px;right:16px;bottom:calc(92px + env(safe-area-inset-bottom,0px));max-width:398px;margin:0 auto;background:#1e293b;border:1px solid var(--border);padding:10px 14px;border-radius:12px;display:none;z-index:300;font-size:.85rem}
+#auth-error{color:var(--red);font-size:.8rem;text-align:center;margin-top:6px}
+</style>
+</head>
+<body>
+
+<!-- ÉCRAN DE CONNEXION SÉCURISÉ -->
+<div id="auth-screen">
+  <div class="login-card">
+    <div class="login-title">Mes Comptes</div>
+    <div class="fm">
+      <label>Email de connexion
+        <input type="email" id="auth-email" placeholder="admin@budget.local ou prescillia@budget.local">
+      </label>
+      <label>Mot de passe
+        <input type="password" id="auth-pass" placeholder="••••••••">
+      </label>
+      <button class="btn-primary" onclick="seConnecter()">Se connecter</button>
+      <div id="auth-error"></div>
+    </div>
+  </div>
+</div>
+
+<div class="app-frame">
+ <div id="net-status">⚠️ Mode hors ligne - Vos données sont sauvegardées localement</div>
+ <header>
+  <div class="app-title" id="header-title">Mes Comptes</div>
+  <div class="user-selector" id="seg"></div>
+ </header>
+ <main>
+  <!-- SYNTHÈSE -->
+  <div id="tab-synth" class="tab">
+   <div class="card"><div class="card-title" style="margin-bottom:6px">Aperçu rapide</div><div class="metrics-grid" id="apercu"></div></div>
+   <div class="card-title" style="margin:2px 0 2px 2px">Prévisions mensuelles</div>
+   <div class="metrics-grid" id="prev"></div>
+   <button class="btn-primary" onclick="ouvrir()">+ Nouvelle opération</button>
+   <div class="card"><div class="card-title" style="margin-bottom:6px">Dernières opérations</div><div id="dern" style="max-height:230px;overflow-y:auto"></div></div>
+   <div class="card">
+    <div class="card-title" style="margin-bottom:6px">Équilibre des charges<span id="eqBadge" class="badge badge-warning" onclick="ouvrirReg()">Détails / Règlement</span></div>
+    <details style="background:transparent;border:none;padding:0;margin:0"><summary class="mu" style="padding:2px 0">Afficher / Masquer l’état des charges</summary><div id="eq" style="font-size:.85rem;font-weight:600;margin-top:6px"></div></details>
+   </div>
+  </div>
+
+  <!-- DÉTAIL -->
+  <div id="tab-detail" class="tab hidden">
+   <div class="card" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+     <button class="user-btn" style="padding:6px 10px" onclick="decaler(-1)">◀ Précédent</button>
+     <input type="month" id="mois" onchange="M=this.value||M;rendre()" style="width:auto;text-align:center;font-weight:600;padding:6px">
+     <button class="user-btn" style="padding:6px 10px" onclick="decaler(1)">Suivant ▶</button>
+    </div>
+    <details style="margin-bottom:0">
+     <summary class="card-title" style="margin-bottom:0">🔍 Filtres d’affichage</summary>
+     <div id="filtres" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"></div>
+    </details>
+   </div>
+   <div id="detailEq" class="card hidden" style="padding:10px 14px"><div class="card-title" style="margin-bottom:4px">Équilibre des charges (mois)</div><div id="detailEqText" style="font-size:.82rem;font-weight:600"></div></div>
+   <div class="card"><div class="card-title" style="margin-bottom:6px">Opérations du mois</div><div id="d-list"></div></div>
+  </div>
+
+  <!-- OPTIONS -->
+  <div id="tab-options" class="tab hidden">
+   <details class="card"><summary class="card-title" style="margin-bottom:0">⚙️ Paramètres du compte</summary>
+    <div class="fm">
+     <label>Nom d’utilisateur<input id="p-n"></label>
+     <label>Solde initial (€) (point zéro absolu)<input type="text" id="p-i" placeholder="Ex : -18,44 ou 25,63" autocomplete="off"></label>
+     <button class="btn-primary" onclick="saveParams()">Enregistrer les paramètres</button>
+    </div>
+   </details>
+   <details class="card"><summary class="card-title" style="margin-bottom:0;display:flex;justify-content:space-between;align-items:center;width:100%"><span>📌 Références fixes</span><button class="badge badge-success" onclick="event.preventDefault();ouvrirTpl('')">+ Ajouter modèle</button></summary><div style="margin-top:10px" id="regles"></div></details>
+
+   <div class="card"><div class="card-title">Données Cloud / Sauvegarde</div>
+    <button class="btn-primary btn-ghost" onclick="exporterCSV()">Exporter au format CSV</button>
+   </div>
+   <!-- BOUTON DE DÉCONNEXION -->
+   <div class="card">
+    <div class="card-title">Session</div>
+    <button class="btn-primary btn-ghost" style="color:var(--red);margin-bottom:0" onclick="seDeconnecter()">Se déconnecter</button>
+   </div>
+  </div>
+ </main>
+ <nav class="ios-nav">
+  <button class="nav-item active" id="nav-synth" onclick="T='synth';rendre()"><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 10h2v7H7zm4-3h2v10h-2zm4 6h2v4h-2z"/></svg>Synthèse</button>
+  <button class="nav-item" id="nav-detail" onclick="T='detail';rendre()"><svg viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/></svg>Détail</button>
+  <button class="nav-item" id="nav-options" onclick="gererClicOptions()"><svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c-.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c-.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6-3.6z"/></svg>Options</button>
+ </nav>
+</div>
+
+<!-- MODAL OPÉRATION -->
+<div id="m-op" class="modal hidden"><div class="modal-content">
+ <div style="display:flex;justify-content:space-between;align-items:center"><h3 id="m-t" style="font-size:1.05rem">Nouvelle opération</h3><button class="del-btn" onclick="fermer('m-op')">✕</button></div>
+ <div class="fm">
+  <label>Libellé<input id="f-l" placeholder="Ex : Courses, Loyer…"></label>
+  <label>Montant (€)<input type="number" step="0.01" id="f-m" placeholder="0.00"></label>
+  <label>Type<select id="f-t"><option value="-1">Débit (Dépense)</option><option value="1">Crédit (Rentrée)</option></select></label>
+  <label>Répartition / Charges communes<select id="f-c"><option value="0">Opération personnelle</option><option value="1">Charge commune (Partagé 50/50)</option></select></label>
+  <label>Date<input type="date" id="f-d"></label>
+  <label class="row" id="f-rbox"><input type="checkbox" id="f-r">Se répète chaque mois</label>
+  <p class="mu" id="f-note"></p>
+  <button class="btn-primary" onclick="enregistrer()">Enregistrer</button></div>
+</div></div>
+
+<!-- MODAL RÉFÉRENCE FIXE -->
+<div id="m-tpl" class="modal hidden"><div class="modal-content">
+ <div style="display:flex;justify-content:space-between;align-items:center"><h3 id="t-t" style="font-size:1.05rem">Référence fixe mensuelle</h3><button class="del-btn" onclick="fermer('m-tpl')">✕</button></div>
+ <div class="fm">
+  <label>Libellé<input id="t-l" placeholder="Ex : Salaire, Loyer…"></label>
+  <label>Montant de référence (€)<input type="number" step="0.01" id="t-m"></label>
+  <label>Type<select id="t-t2"><option value="-1">Débit</option><option value="1">Crédit</option></select></label>
+  <label>Répartition<select id="t-c"><option value="0">Personnel</option><option value="1">Charge commune</option></select></label>
+  <label>Date / Jour du mois<input type="date" id="t-j"></label>
+  <label>Date de fin (optionnel)<input type="date" id="t-f"></label>
+  <button class="btn-primary" onclick="enregistrerTpl()">Sauvegarder</button></div>
+</div></div>
+
+<!-- MODAL RÈGLEMENT -->
+<div id="m-reg" class="modal hidden"><div class="modal-content">
+ <div style="display:flex;justify-content:space-between;align-items:center"><h3 style="font-size:1.05rem">Équilibre des charges</h3><button class="del-btn" onclick="fermer('m-reg')">✕</button></div>
+ <div id="r-det" style="font-size:.85rem;color:var(--text-muted);margin:12px 0"></div>
+ <div class="fm"><label>Date du règlement<input type="date" id="r-d"></label>
+  <button class="btn-primary" onclick="validerReg()">Valider le règlement</button>
+  <button class="btn-primary btn-ghost" onclick="annulerReg()">Annuler le règlement</button></div>
+</div></div>
+<div id="toast"></div>
+
+<script>
+const SB_URL = 'https://owjsoiqpukflmfpjlbyz.supabase.co';
+const SB_KEY = 'sb_publishable_x3D526hO0y-6584s5Z26ZQ_E8hrDFRj';
+const supabaseClient = window.supabase.createClient(SB_URL, SB_KEY);
+
+let S = { users: [], ops: [], regles: [] }, U = '', T = 'synth', M = '', ED = '', ET = '', RM = '', ROWS = {};
+const F = {deb:1, cre:1, men:1, pon:1, com:1, roll:1, eq:0};
+let isAdmin = false;
+let eqData = { txt: 'Chargement...' };
+
+const $ = id => document.getElementById(id);
+const p2 = n => String(n).padStart(2,'0');
+const iso = d => d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());
+const today = () => iso(new Date());
+const eur = n => n.toLocaleString('fr-FR',{style:'currency',currency:'EUR'});
+const esc = s => String(s).replace(/[&<>"]/g, c => '&#'+c.charCodeAt(0)+';');
+const fd = d => d.slice(8)+'-'+d.slice(5,7)+'-'+d.slice(0,4);
+const usr = id => S.users.find(u => u.id === id);
+const somme = l => l.reduce((a, x) => a + x.m, 0);
+
+const safeDateIso = (y, m, day) => {
+  const nb = new Date(y, m + 1, 0).getDate();
+  return iso(new Date(y, m, Math.min(day, nb)));
+};
+
+function msg(t){
+  const e = $('toast');
+  e.textContent = t; e.style.display = 'block';
+  clearTimeout(msg.h);
+  msg.h = setTimeout(() => e.style.display = 'none', 4500);
+}
+
+// --- AUTHENTIFICATION & SESSION ---
+async function verifierSession() {
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (session) {
+    $('auth-screen').classList.add('hidden');
+    const userId = session.user.id;
+    
+    const { data: profile } = await supabaseClient
+      .from('profiles')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+      
+    if (profile) {
+      isAdmin = (profile.role === 'admin');
+    }
+    
+    await chargerCloud();
+  } else {
+    $('auth-screen').classList.remove('hidden');
+  }
+}
+
+async function seConnecter() {
+  const email = $('auth-email').value.trim();
+  const password = $('auth-pass').value;
+  const errorEl = $('auth-error');
+  errorEl.textContent = '';
+
+  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if (error) {
+    errorEl.textContent = "Identifiant ou mot de passe incorrect.";
+  } else {
+    verifierSession();
+  }
+}
+
+async function seDeconnecter() {
+  await supabaseClient.auth.signOut();
+  localStorage.clear();
+  location.reload();
+}
+
+// --- CHARGEMENT CLOUD DEPUIS TABLES SUPABASE ---
+async function chargerCloud(silencieux = false) {
+  try {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session) return;
+    const userId = session.user.id;
+
+    // 1. Profils
+    const { data: profiles } = await supabaseClient.from('profiles').select('*');
+    if (profiles) {
+      S.users = profiles.map(p => ({
+        id: p.user_id,
+        nom: p.nom,
+        role: p.role,
+        init: 0
+      }));
+    }
+
+    // 2. Comptes
+    const { data: comptes } = await supabaseClient.from('comptes').select('*');
+    if (comptes) {
+      comptes.forEach(c => {
+        const u = S.users.find(user => user.id === c.owner);
+        if (u && c.type === 'courant') {
+          u.init = Number(c.solde_initial) || 0;
+          u.compte_id = c.id;
+        }
+      });
+    }
+
+    if (!U || !S.users.some(u => u.id === U)) {
+      U = userId;
+    }
+    if (!isAdmin) {
+      U = userId;
+    }
+
+    // 3. Opérations
+    const { data: opsData } = await supabaseClient.from('operations').select('*');
+    if (opsData) {
+      S.ops = opsData.map(o => ({
+        id: o.id,
+        u: o.owner,
+        l: o.libelle,
+        m: Number(o.montant),
+        d: o.date_op,
+        c: o.commune,
+        p: o.pointe,
+        reg: o.reglement_mois
+      }));
+    }
+
+    // 4. Règles récurrentes
+    const { data: reglesData } = await supabaseClient.from('regles').select('*');
+    if (reglesData) {
+      S.regles = reglesData.map(r => ({
+        id: r.id,
+        u: r.owner,
+        l: r.libelle,
+        m: Number(r.montant),
+        jour: r.jour,
+        debut: r.debut,
+        fin: r.fin,
+        c: r.commune,
+        exc: r.exc || {},
+        pointe: r.pointe || {}
+      }));
+    }
+
+    // Pousser les totaux de charges communes calculés pour le mois en cours
+    await pousserChargesCommunesMois();
+    await chargerEquilibre();
+
+    if (!silencieux) rendre();
+
+  } catch (e) {
+    console.error('Erreur chargement cloud', e);
+  }
+}
+
+async function pousserChargesCommunesMois() {
+  const currentM = M || today().slice(0,7);
+  for (const u of S.users) {
+    const totalCom = -somme(brut(u.id, currentM + '-31').filter(x => x.c && x.m < 0 && x.d.startsWith(currentM)));
+    await supabaseClient.from('charges_communes_mois').upsert({
+      owner: u.id,
+      mois: currentM,
+      total: totalCom
+    });
+  }
+}
+
+async function chargerEquilibre() {
+  const currentM = M || today().slice(0,7);
+  const { data } = await supabaseClient.rpc('equilibre', { p_mois: currentM });
+  if (data) {
+    eqData = data;
+  }
+}
+
+// --- LOGIQUE MÉTIER ET CALCULS ---
+function brut(uid, hingga){
+  const r = S.ops.filter(o => o.u === uid && o.d <= hingga);
+  for (const g of S.regles.filter(g => g.u === uid)){
+    const [y, m0] = g.debut.split('-').map(Number);
+    for (let m = m0 - 1; ; m++){
+      const d = safeDateIso(y, m, g.jour);
+      if (iso(new Date(y, m - 1, 1)) > hingga || (g.fin && d > g.fin)) break;
+      if (d < g.debut) continue;
+      const k = d.slice(0,7), e = g.exc && g.exc[k];
+      if (e && e.skip) continue;
+      const dd = e && e.d ? e.d : d;
+      const mm = e && e.m !== undefined ? e.m : g.m;
+      const ll = e && e.l !== undefined ? e.l : g.l;
+      const cc = e && e.c !== undefined ? e.c : g.c;
+      if (dd <= hingga) r.push({u:uid, d:dd, l:ll, m:mm, c:cc, g, k});
+    }
+  }
+  return r;
+}
+
+function projections(uid, hingga){
+  const n = new Date(), r = [];
+  for (let i = 1; i <= 2; i++){
+    const ym = iso(new Date(n.getFullYear(), n.getMonth()+i, 1)).slice(0,7), d = ym+'-12';
+    if (d > hingga || S.ops.some(o => o.reg === ym)) continue;
+    if (Math.abs(eqData.ecart || 0) < .005) continue;
+    const ecart = eqData.ecart || 0;
+    const isDebiteur = (ecart > 0 && U !== eqData.a_id) || (ecart < 0 && U === eqData.a_id);
+    const a = Math.abs(ecart);
+    r.push({u:uid, d, l:'Règlement charges communes (projection)', m:isDebiteur ? -a : a, c:false, proj:true, k:ym});
+  }
+  return r;
+}
+
+const mouvements = (uid, j) => brut(uid, j).concat(projections(uid, j));
+const solde = (uid, date) => (usr(uid)?.init || 0) + somme(mouvements(uid, date));
+
+function mini(uid, ym){
+  const [y, m] = ym.split('-').map(Number), deb = iso(new Date(y, m-1, 1)), fin = new Date(y, m, 0);
+  const mv = mouvements(uid, iso(fin));
+  let s = (usr(uid)?.init || 0) + somme(mv.filter(x => x.d < deb)), r = {s, d:deb};
+  for (let j = new Date(y, m-1, 1); j <= fin; j.setDate(j.getDate()+1)){
+    s += somme(mv.filter(x => x.d === iso(j)));
+    if (s < r.s) r = {s, d:iso(j)};
+  }
+  return r;
+}
+
+const cle = x => x.id || (x.g ? 'r'+x.g.id+'|'+x.k : 'p'+x.k);
+
+function ligne(x, s){
+  const t = today(), id = cle(x); ROWS[id] = x;
+  const del = x.proj ? '' : `<button class="del-btn" onclick="event.stopPropagation();supprimer('${id}')">✕</button>`;
+  return `<div class="op-item ${x.d===t?'today-op':''}" style="${x.d>t?'opacity:.7':''}" onclick="${x.proj?`ouvrirReg('${x.k}')`:`ouvrir('${id}')`}">
+   <div class="op-info">
+    <div class="op-label">${esc(x.l)} ${x.g?'🔄':''} ${x.c?'🤝':''} ${x.proj?'👩‍❤️‍👨':''}</div>
+    <div class="op-sub">${fd(x.d)}${s===undefined?'':' · solde '+eur(s)}</div>
+   </div>
+   <div class="op-right"><div class="op-amount ${x.m<0?'red':'green'}">${x.m>0?'+':''}${eur(x.m)}</div>${del}</div>
+  </div>`;
+}
+
+function rendre(){
+  ROWS = {}; const t = today(); if (!M) M = t.slice(0,7);
+  
+  if (isAdmin) {
+    $('seg').innerHTML = S.users.map(u => `<button class="user-btn ${u.id===U?'active':''}" onclick="U='${u.id}';rendre()">${esc(u.nom)}</button>`).join('');
+  } else {
+    const activeUser = usr(U) || S.users.find(u => u.role !== 'admin') || S.users[0];
+    $('seg').innerHTML = `<button class="user-btn active">${esc(activeUser?.nom || '')}</button>`;
+  }
+  
+  for (const v of ['synth','detail','options']){
+    $('tab-'+v).classList.toggle('hidden', v !== T);$('nav-'+v).classList.toggle('active', v === T);
+  }
+  synthese(t); detail();
+  
+  const activeUser = usr(U);
+  if (activeUser){ $('p-n').value = activeUser.nom; $('p-i').value = activeUser.init; }
+}
+
+function synthese(t){
+  const [y, m] = t.split('-').map(Number), suiv = iso(new Date(y, m, 1)).slice(0,7);
+  const box = (n, v) => `<div class="metric-box"><div class="metric-label">${n}</div><div class="metric-val ${v<0?'red':'green'}">${eur(v)}</div></div>`;
+  $('apercu').innerHTML = box('Solde actuel', solde(U, t)) + box('Fin de mois estimé', solde(U, iso(new Date(y, m, 0))));
+  const prev = (n, r) => `<div class="metric-box"><div class="metric-label" style="font-weight:700;color:var(--text)">${n}</div>
+    <div class="mu" style="margin-top:4px">Mini : <span class="${r.s<0?'red':''}" style="color:var(--text)">${eur(r.s)}</span></div></div>`;
+  $('prev').innerHTML = prev('Mois en cours', mini(U, t.slice(0,7))) + prev('Mois suivant', mini(U, suiv));
+  $('dern').innerHTML = mouvements(U, t).sort((a, b) => b.d.localeCompare(a.d)).slice(0, 10).map(x => ligne(x)).join('') || '<p class="mu" style="text-align:center">Aucune opération</p>';
+  
+  const reg = S.ops.find(o => o.reg === M), b = $('eqBadge');
+  b.textContent = reg ? 'Validé' : 'Détails / Règlement'; b.className = 'badge ' + (reg ? 'badge-success' : 'badge-warning');
+  $('eq').innerHTML = `<span class="mu">${M}</span><br>${eqData.txt || 'Calcul en cours...'}`;
+}
+
+function detail(){
+  $('mois').value = M;
+  const tous = mouvements(U, M+'-31'), avant = (usr(U)?.init || 0) + somme(tous.filter(x => x.d < M+'-01'));
+  let s = avant;
+  const lignes = tous.filter(x => x.d.startsWith(M)).sort((a, b) => a.d.localeCompare(b.d))
+    .map(x => { s += x.m; return {x, s}; });
+  const ok = o => (o.x.m < 0 ? F.deb : F.cre) && (o.x.g ? F.men : F.pon) && (F.com || !o.x.c);
+  $('detailEq').classList.toggle('hidden', !F.eq); $('detailEqText').textContent = eqData.txt || '';
+  $('d-list').innerHTML = lignes.filter(ok).reverse().map(o => ligne(o.x, F.roll ? o.s : undefined)).join('') || '<p class="mu" style="text-align:center">Aucune opération</p>';
+  
+  $('regles').innerHTML = S.regles.map(g => g.u !== U ? '' : `<div class="op-item" onclick="ouvrirTpl('${g.id}')">
+    <div class="op-info"><div class="op-label">${esc(g.l)} ${g.c?'🤝':''}</div><div class="op-sub">Chaque mois le ${g.jour}</div></div>
+    <div class="op-right"><div class="op-amount ${g.m<0?'red':'green'}">${eur(g.m)}</div></div>
+  </div>`).join('') || '<p class="mu" style="text-align:center">Aucune référence.</p>';
+}
+
+function decaler(n){
+  const [y, m] = M.split('-').map(Number);
+  M = iso(new Date(y, m-1+n, 1)).slice(0,7);
+  pousserChargesCommunesMois().then(() => chargerEquilibre()).then(() => rendre());
+}
+
+const fermer = id => $(id).classList.add('hidden');
+const ouvrirM = id => $(id).classList.remove('hidden');
+
+async function saveParams(){
+  const u = usr(U); if(!u) return;
+  const newInit = parseFloat($('p-i').value.replace(',', '.')) || 0;
+  u.init = newInit;
+  
+  if (u.compte_id) {
+    await supabaseClient.from('comptes').update({ solde_initial: newInit }).eq('id', u.compte_id);
+    msg('Paramètres enregistrés.');
+    rendre();
+  }
+}
+
+function ouvrir(id){
+  ED = id || ''; const x = ED ? ROWS[ED] : null;
+  $('m-t').textContent = x ? 'Modifier' : 'Nouvelle opération';
+  $('f-l').value = x ? x.l : ''; $('f-m').value = x ? Math.abs(x.m) : '';
+  $('f-t').value = x && x.m > 0 ? '1' : '-1'; $('f-c').value = x && x.c ? '1' : '0';
+  $('f-d').value = x ? x.d : today(); $('f-rbox').classList.toggle('hidden', !!ED);
+  ouvrirM('m-op');
+}
+
+async function enregistrer(){
+  const l = $('f-l').value.trim(), v = Math.abs(parseFloat($('f-m').value)), d = $('f-d').value, sg = +$('f-t').value, c = $('f-c').value === '1';
+  if (!l || isNaN(v) || !d) return msg('Champs requis.');
+  const uObj = usr(U);
+
+  if (ED && S.ops.some(o => o.id === ED)) {
+    await supabaseClient.from('operations').update({
+      libelle: l,
+      montant: sg * v,
+      date_op: d,
+      commune: c
+    }).eq('id', ED);
+  } else if ($('f-r').checked) {
+    const j = new Date(d).getDate();
+    await supabaseClient.from('regles').insert({
+      owner: U,
+      compte_id: uObj?.compte_id,
+      libelle: l,
+      montant: sg * v,
+      jour: j,
+      debut: d,
+      commune: c
+    });
+  } else {
+    await supabaseClient.from('operations').insert({
+      owner: U,
+      compte_id: uObj?.compte_id,
+      libelle: l,
+      montant: sg * v,
+      date_op: d,
+      commune: c
+    });
+  }
+
+  fermer('m-op');
+  await chargerCloud();
+}
+
+async function supprimer(id){
+  if (!id) return;
+  if (id.startsWith('r')) {
+    const parts = id.slice(1).split('|');
+    const rId = parts[0], k = parts[1];
+    const r = S.regles.find(x => x.id === rId);
+    if (r) {
+      r.exc = r.exc || {};
+      r.exc[k] = { skip: true };
+      await supabaseClient.from('regles').update({ exc: r.exc }).eq('id', rId);
+    }
+  } else {
+    await supabaseClient.from('operations').delete().eq('id', id);
+  }
+  await chargerCloud();
+}
+
+function ouvrirTpl(id){
+  ET = id || '';
+  const g = ET ? S.regles.find(r => r.id === ET) : null;
+  $('t-t').textContent = g ? 'Modifier référence' : 'Référence fixe mensuelle';
+  $('t-l').value = g ? g.l : '';
+  $('t-m').value = g ? Math.abs(g.m) : '';
+  $('t-t2').value = g && g.m > 0 ? '1' : '-1';
+  $('t-c').value = g && g.c ? '1' : '0';
+  $('t-j').value = g ? g.debut : today();
+  $('t-f').value = g && g.fin ? g.fin : '';
+  ouvrirM('m-tpl');
+}
+
+async function enregistrerTpl(){
+  const l = $('t-l').value.trim(), v = Math.abs(parseFloat($('t-m').value)), sg = +$('t-t2').value, c = $('t-c').value === '1', d = $('t-j').value, f = $('t-f').value;
+  if (!l || isNaN(v) || !d) return msg('Champs requis.');
+  const uObj = usr(U);
+  const j = new Date(d).getDate();
+
+  if (ET) {
+    await supabaseClient.from('regles').update({
+      libelle: l,
+      montant: sg * v,
+      jour: j,
+      debut: d,
+      fin: f || null,
+      commune: c
+    }).eq('id', ET);
+  } else {
+    await supabaseClient.from('regles').insert({
+      owner: U,
+      compte_id: uObj?.compte_id,
+      libelle: l,
+      montant: sg * v,
+      jour: j,
+      debut: d,
+      fin: f || null,
+      commune: c
+    });
+  }
+
+  fermer('m-tpl');
+  await chargerCloud();
+}
+
+function ouvrirReg(ym){
+  RM = ym || M;
+  $('r-det').innerHTML = `Mois : <b>${RM}</b><br><br>${eqData.txt || ''}`;
+  $('r-d').value = today(); ouvrirM('m-reg');
+}
+
+async function validerReg(){
+  const d = $('r-d').value; if (!d) return;
+  await supabaseClient.from('operations').delete().eq('reglement_mois', RM);
+  
+  if (Math.abs(eqData.ecart || 0) >= .005){
+    const ecart = eqData.ecart;
+    const adminUser = S.users.find(u => u.role === 'admin');
+    const normalUser = S.users.find(u => u.role !== 'admin');
+    const a = Math.abs(ecart);
+
+    const debiteur = ecart > 0 ? normalUser : adminUser;
+    const crediteur = ecart > 0 ? adminUser : normalUser;
+
+    if (debiteur && crediteur) {
+      await supabaseClient.from('operations').insert([
+        { owner: debiteur.id, compte_id: debiteur.compte_id, libelle: 'Règlement charges', montant: -a, date_op: d, reglement_mois: RM },
+        { owner: crediteur.id, compte_id: crediteur.compte_id, libelle: 'Règlement charges', montant: a, date_op: d, reglement_mois: RM }
+      ]);
+    }
+  }
+  fermer('m-reg');
+  await chargerCloud();
+}
+
+async function annulerReg(){
+  await supabaseClient.from('operations').delete().eq('reglement_mois', RM);
+  fermer('m-reg');
+  await chargerCloud();
+}
+
+function exporterCSV(){
+  let csvContent = "Date;Utilisateur;Libelle;Montant (€);Type;Charge Commune\n";
+  const opsTriees = [...S.ops].sort((a,b) => b.d.localeCompare(a.d));
+  
+  opsTriees.forEach(o => {
+    const uObj = usr(o.u);
+    const uNom = uObj ? uObj.nom : o.u;
+    const typeOp = o.m < 0 ? "Débit" : "Crédit";
+    const commune = o.c ? "Oui" : "Non";
+    const libellePropre = `"${(o.l || '').replace(/"/g, '""')}"`;
+    const montantPropre = o.m.toString().replace('.', ',');
+    
+    csvContent += `${o.d};${uNom};${libellePropre};${montantPropre};${typeOp};${commune}\n`;
+  });
+
+  const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'export_operations.csv';
+  a.click();
+}
+
+function gererClicOptions(){ T = 'options'; rendre(); }
+
+$('filtres').innerHTML = [['deb','Débits'],['cre','Crédits'],['men','Récurrentes'],['pon','Ponctuelles'],['com','Communes',1],['roll','Solde glissant',1],['eq','Équilibre',1]]
+  .map(([k, n, w]) => `${k==='roll'?'<div style="grid-column:span 2;border-top:1px solid var(--border)"></div>':''}<label class="row" style="${w?'grid-column:span 2':''}"><input type="checkbox" ${F[k]?'checked':''} onchange="F['${k}']=this.checked;rendre()">${n}</label>`).join('');
+
+verifierSession();
+</script>
+</body>
+</html>
