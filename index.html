@@ -236,6 +236,19 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
 <div id="toast"></div>
 
 <script>
+// Enregistrement automatique d'un Service Worker en arrière-plan (permet d'ouvrir l'app hors-ligne)
+if ('serviceWorker' in navigator) {
+  const swCode = `
+    self.addEventListener('install', e => self.skipWaiting());
+    self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
+    self.addEventListener('fetch', e => {
+      e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+    });
+  `;
+  const blob = new Blob([swCode], { type: 'text/javascript' });
+  navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(() => {});
+}
+
 const SB_URL = 'https://spbqnbstlnczaensilge.supabase.co';
 const SB_KEY = 'sb_publishable_efoSjjwy88avztgJUwg1zA_op-pIFDd';
 const supabaseClient = window.supabase.createClient(SB_URL, SB_KEY);
@@ -350,22 +363,51 @@ async function verifierSession() {
     try { S = JSON.parse(localBackup); } catch(e){} 
   }
   
-  const { data: { session } } = await supabaseClient.auth.getSession();
-  if (session) {
-    $('auth-screen').classList.add('hidden');
-    const email = session.user.email;
-    if (email.includes('admin') || email.includes('kevin')) {
-      isAdmin = true;
-      U = '2899de9f-a408-419b-aee1-c5f26980f2b4';
+  try {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (session) {
+      gererSuccesSession(session);
     } else {
-      isAdmin = false;
-      U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
+      verifierSessionLocale();
     }
-    await chargerCloud();
+  } catch (e) {
+    // Si hors ligne et que getSession() plante, on vérifie si une session locale existe
+    verifierSessionLocale();
+  }
+  verifierConnexionReelle();
+}
+
+function verifierSessionLocale() {
+  let hasSupabaseSession = false;
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
+      hasSupabaseSession = true;
+      break;
+    }
+  }
+  
+  if (hasSupabaseSession || localStorage.getItem('mon_budget_local_data')) {
+    $('auth-screen').classList.add('hidden');
+    isAdmin = true;
+    U = '2899de9f-a408-419b-aee1-c5f26980f2b4';
+    rendre();
   } else {
     $('auth-screen').classList.remove('hidden');
   }
-  verifierConnexionReelle();
+}
+
+function gererSuccesSession(session) {
+  $('auth-screen').classList.add('hidden');
+  const email = session.user.email;
+  if (email.includes('admin') || email.includes('kevin')) {
+    isAdmin = true;
+    U = '2899de9f-a408-419b-aee1-c5f26980f2b4';
+  } else {
+    isAdmin = false;
+    U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
+  }
+  chargerCloud();
 }
 
 async function seConnecter() {
