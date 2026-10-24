@@ -328,7 +328,14 @@ async function verifierConnexionReelle() {
   }
 }
 
-window.addEventListener('online', verifierConnexionReelle);
+window.addEventListener('online', async () => {
+  verifierConnexionReelle();
+  if (navigator.onLine) {
+    await sauverCloudForce();
+    msg("Connexion rétablie : vos modifications hors-ligne ont été synchronisées.");
+  }
+});
+
 window.addEventListener('offline', () => {
   const banner = $('net-status');
   if(banner) {
