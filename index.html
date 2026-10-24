@@ -653,13 +653,13 @@ function synthese(t){
     const valClass = r.s < 0 ? 'red' : 'green';
     return `<div class="metric-box" style="padding:12px 10px;">
       <div class="metric-label" style="font-weight:700;color:var(--text);font-size:.72rem;">${titreMois} <span style="color:var(--text-muted);font-weight:500;">(${nomMois})</span></div>
-      <div style="margin-top:6px;font-size:.82rem;color:var(--text-muted);">Mini : <span class="${valClass}" style="font-weight:800;">${eur(r.s)}</span> <span style="color:var(--text-muted);">(${formaterDateFr(r.d)})</span></div>
+      <div style="margin-top:6px;font-size:.82rem;color:var(--text-muted);">Mini : <span class="${valClass}" style="font-weight:800;color:#fff;">${eur(r.s)}</span> <span style="color:var(--text-muted);">(${formaterDateFr(r.d)})</span></div>
     </div>`;
   };
   
   $('prev').innerHTML = prev('Mois en cours', moisEnCoursNom, mini(U, t.slice(0,7))) + prev('Mois suivant', moisSuivantNom, mini(U, suiv));
   
-  $('dern').innerHTML = mouvementsTheoriques(U, t).sort((a, b) => b.d.localeCompare(a.d)).slice(0, 10).map(x => ligne(x, undefined, false)).join('') || '<p class="mu" style="text-align:center">Aucune opération</p>';
+  $('dern').innerHTML = mouvementsTheoriques(U, t).sort((a, b) => b.d.localeCompare(b.d)).slice(0, 10).map(x => ligne(x, undefined, false)).join('') || '<p class="mu" style="text-align:center">Aucune opération</p>';
   
   const reg = S.ops.find(o => o.reg === M), b = $('eqBadge');
   b.textContent = reg ? 'Validé' : 'Détails / Règlement'; b.className = 'badge ' + (reg ? 'badge-success' : 'badge-warning');
@@ -683,9 +683,7 @@ function detail(){
     return `<div class="op-item" onclick="ouvrirTpl(${i})">
       <div class="op-info"><div class="op-label">${esc(g.l)} ${g.c?'🤝':''}</div><div class="op-sub">Chaque mois le ${g.jour || 1}</div></div>
       <div class="op-right">
-        <button class="check-btn" onclick="event.stopPropagation(); mettreAJourRecurrencesFutures(${i})" title="Modifier les récurrences futures (garde le mois en cours)" style="background:rgba(245,158,11,0.15);color:var(--warning);border-color:rgba(245,158,11,0.3)">🔄</button>
         <div class="op-amount ${mClass}">${eur(g.m)}</div>
-        <button class="del-btn" onclick="event.stopPropagation(); supprimerTplDirect(${i})" title="Supprimer cette référence">✕</button>
       </div>
     </div>`;
   }).join('') || '<p class="mu" style="text-align:center">Aucune référence.</p>';
@@ -700,26 +698,24 @@ function mettreAJourRecurrencesFutures(idx) {
   if (isNaN(val)) return msg('Montant invalide.');
   
   const typeActuel = g.m < 0 ? -1 : 1;
-  g.m = typeActuel * val;
+  const nouveauMontantFinal = typeActuel * val;
   
   const now = new Date();
   const anneeCourante = now.getFullYear();
   const moisCourant = now.getMonth() + 1;
   const ymCourant = `${anneeCourante}-${p2(moisCourant)}`;
   
-  g.debut = ymCourant;
-  
   g.exc = g.exc || {};
-  Object.keys(g.exc).forEach(k => {
-    if (k <= ymCourant) {
-    } else {
-      delete g.exc[k];
-    }
-  });
+  g.exc[ymCourant] = g.exc[ymCourant] || {};
+  
+  const montantActuelMoisEnCours = g.exc[ymCourant].m !== undefined ? g.exc[ymCourant].m : g.m;
+  g.exc[ymCourant].m = montantActuelMoisEnCours;
+
+  g.m = nouveauMontantFinal;
 
   sauver();
   rendre();
-  msg('Récurrences futures mises à jour avec succès !');
+  msg('Récurrences futures mises à jour avec succès (le mois en cours a été préservé) !');
 }
 
 function supprimerTplDirect(idx) {
@@ -872,30 +868,9 @@ function enregistrerTpl(){
 
 function rafraichirRecurrencesTpl(){
   if (ET === -1) return;
-  const g = S.regles[ET];
-  const l = $('t-l').value.trim();
-  const mVal = Math.abs(parseFloat($('t-m').value));
-  const sg = +$('t-t2').value;
-  const c = $('t-c').value === '1';
-  const jour = parseInt($('t-j').value) || 1;
-  const debut = $('t-deb').value.trim() || today().slice(0,7);
-  const fin = $('t-f').value;
-
-  if (!l || isNaN(mVal)) return msg('Veuillez remplir le libellé et le montant.');
-
-  g.l = l;
-  g.m = sg * mVal;
-  g.jour = jour;
-  g.debut = debut;
-  g.fin = fin || undefined;
-  g.c = c;
-  g.checked = false;
-  g.exc = {};
-
-  sauver();
+  const idx = ET;
   fermer('m-tpl');
-  rendre();
-  msg('Récurrences actualisées avec succès !');
+  mettreAJourRecurrencesFutures(idx);
 }
 
 function supprimerTpl(){
