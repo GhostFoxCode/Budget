@@ -916,8 +916,8 @@ const soldeTheoriqueFinMois = (uid, date) => usr(uid).init + somme(mouvementsThe
 
 function mini(uid, ym){
   const [y, m] = ym.split('-').map(Number), deb = iso(new Date(y, m-1, 1)), fin = new Date(y, m, 0);
-  // Les opérations marquées "en attente" sont ignorées pour le Mini
-  const mv = mouvementsTheoriques(uid, iso(fin)).filter(x => !x.att);
+  // Les opérations cochées (= en attente) sont ignorées pour le Mini
+  const mv = mouvementsTheoriques(uid, iso(fin)).filter(x => !x.checked);
   let s = usr(uid).init + somme(mv.filter(x => x.d < deb)), r = {s, d:deb};
   for (let j = new Date(y, m-1, 1); j <= fin; j.setDate(j.getDate()+1)){
     const dateJour = iso(j);
@@ -984,7 +984,6 @@ function ligne(x, s, avecCoche = true){
   
   const peutModifier = isAdmin || demoUserLocked || x.u === U;
   const del = (x.proj || !peutModifier) ? '' : `<button class="del-btn" onclick="event.stopPropagation();${opReal?`supprimer('${opReal.id}')`:`retirer('${id}')`}">✕</button>`;
-  const attBtn = (!avecCoche || x.proj || !peutModifier) ? '' : `<button class="del-btn att-btn ${x.att ? 'on' : ''}" title="En attente (hors Mini et solde glissant)" onclick="toggleAtt('${id}', event)">⏳</button>`;
   const checkboxHtml = (!avecCoche || x.proj) ? '' : `<input type="checkbox" ${x.checked ? 'checked' : ''} ${!peutModifier ? 'disabled' : ''} onclick="toggleCheck('${id}', event)" style="margin-right:8px; cursor:${peutModifier?'pointer':'default'};" title="Décompte solde banque">`;
   
   return `<div class="op-item ${x.d===t?'today-op':''}" style="${x.d>t?'opacity:.7':''}" onclick="${peutModifier ? (x.proj ? `ouvrirReg('${x.k}')` : `ouvrir('${id}')`) : `msg('Action non autorisée sur ce compte')`}">
@@ -992,7 +991,7 @@ function ligne(x, s, avecCoche = true){
     <div class="op-label">${checkboxHtml}${esc(x.l)} ${x.opObj && x.opObj.mvt ? '💰' : ''} ${x.g?'🔄':''} ${x.c?'🤝':''} ${x.proj?'👩‍❤️‍👨':''}</div>
     <div class="op-sub">${fd(x.d)}${s===undefined?'':' · solde '+eur(s)}</div>
    </div>
-   <div class="op-right"><div class="op-amount ${x.m<0?'red':'green'}">${x.m>0?'+':''}${eur(x.m)}</div>${attBtn}${del}</div>
+   <div class="op-right"><div class="op-amount ${x.m<0?'red':'green'}">${x.m>0?'+':''}${eur(x.m)}</div>${del}</div>
   </div>`;
 }
 
@@ -1063,13 +1062,13 @@ function synthese(t){
 
 function detail(){
   $('mois').value = M;
-  // Les opérations "en attente" ne comptent pas dans le solde glissant
-  const tous = mouvementsTheoriques(U, M+'-31'), avant = usr(U).init + somme(tous.filter(x => x.d < M+'-01' && !x.att));
+  // Les opérations cochées (= en attente) ne comptent pas dans le solde glissant
+  const tous = mouvementsTheoriques(U, M+'-31'), avant = usr(U).init + somme(tous.filter(x => x.d < M+'-01' && !x.checked));
   let s = avant;
   
   const lignes = tous.filter(x => x.d.startsWith(M))
     .sort((a, b) => a.d.localeCompare(b.d) || b.m - a.m)
-    .map(x => { if (!x.att) s += x.m; return {x, s}; });
+    .map(x => { if (!x.checked) s += x.m; return {x, s}; });
     
   const ok = o => (o.x.m < 0 ? F.deb : F.cre) && (o.x.g ? F.men : F.pon) && (F.com || !o.x.c);
   $('detailEq').classList.toggle('hidden', !F.eq); $('detailEqText').textContent = commun(M).txt;
