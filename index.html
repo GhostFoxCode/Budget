@@ -901,9 +901,9 @@ const mouvementsBanque = (uid, j) => brut(uid, j, true);
 const mouvementsTheoriques = (uid, j) => brut(uid, j, false).concat(projections(uid, j, false));
 
 const soldeActuelBanque = (uid, date) => usr(uid).init + somme(mouvementsBanque(uid, date));
-// Les opérations cochées (= en attente) sont ignorées par le solde théorique et la fin de mois estimé
-const soldeTheoriqueActuel = (uid, date) => usr(uid).init + somme(mouvementsTheoriques(uid, date).filter(x => !x.checked));
-const soldeTheoriqueFinMois = (uid, date) => usr(uid).init + somme(mouvementsTheoriques(uid, date).filter(x => !x.checked));
+// Solde théorique et fin de mois estimé : comptent TOUTES les opérations (cochées ou non)
+const soldeTheoriqueActuel = (uid, date) => usr(uid).init + somme(mouvementsTheoriques(uid, date));
+const soldeTheoriqueFinMois = (uid, date) => usr(uid).init + somme(mouvementsTheoriques(uid, date));
 
 function mini(uid, ym){
   const [y, m] = ym.split('-').map(Number), deb = iso(new Date(y, m-1, 1)), fin = new Date(y, m, 0);
