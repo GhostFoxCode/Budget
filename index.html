@@ -170,7 +170,7 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
    </details>
 
    <!-- RÉFÉRENCES FIXES -->
-   <details class="card" open>
+   <details class="card">
     <summary class="card-title" style="margin-bottom:0; display:flex; justify-content:space-between; align-items:center; width:100%;">
       <span>📌 Références fixes</span>
       <span class="badge badge-success" onclick="event.preventDefault(); event.stopPropagation(); ouvrirTpl(-1);">+ Ajouter modèle</span>
@@ -178,18 +178,22 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
     <div style="margin-top:10px" id="regles"></div>
    </details>
 
-   <div class="card"><div class="card-title">Données Cloud / Sauvegarde</div>
-    <button class="btn-primary btn-ghost" onclick="exporterJSON()">Exporter la sauvegarde JSON</button>
-    <button class="btn-primary btn-ghost" onclick="exporterCSV()">Exporter au format CSV</button>
-    <p class="mu" style="margin:10px 0 6px">Importer un fichier de sauvegarde .json :</p>
-    <input type="file" accept=".json,application/json" onchange="lireFichier(this,importerJSON)">
-   </div>
+   <details class="card"><summary class="card-title" style="margin-bottom:0">☁️ Données Cloud / Sauvegarde</summary>
+    <div style="margin-top:10px">
+     <button class="btn-primary btn-ghost" onclick="exporterJSON()">Exporter la sauvegarde JSON</button>
+     <button class="btn-primary btn-ghost" onclick="exporterCSV()">Exporter au format CSV</button>
+     <p class="mu" style="margin:10px 0 6px">Importer un fichier de sauvegarde .json :</p>
+     <input type="file" accept=".json,application/json" onchange="lireFichier(this,importerJSON)">
+    </div>
+   </details>
    
    <!-- SESSION & DÉCONNEXION -->
-   <div class="card">
-    <div class="card-title">Session</div>
-    <button class="btn-primary btn-ghost" type="button" style="color:var(--red);margin-bottom:0" onclick="seDeconnecter()">Se déconnecter</button>
-   </div>
+   <details class="card">
+    <summary class="card-title" style="margin-bottom:0"><span><svg viewBox="0 0 24 24" width="14" height="14" style="vertical-align:-2px;margin-right:6px" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M6.3 6.7a8 8 0 1 0 11.4 0"/></svg>Session</span></summary>
+    <div style="margin-top:10px">
+     <button class="btn-primary btn-ghost" type="button" style="color:var(--red);margin-bottom:0" onclick="seDeconnecter()">Se déconnecter</button>
+    </div>
+   </details>
 
    <!-- OPTIONS DÉVELOPPEUR -->
    <details class="card">
