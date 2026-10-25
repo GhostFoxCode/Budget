@@ -71,7 +71,7 @@ main{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column
 .op-amount{font-weight:700;font-size:.9rem;white-space:nowrap}
 .del-btn{color:var(--text-muted);font-size:.85rem;border:none;background:rgba(255,255,255,.06);width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
 nav.ios-nav{position:absolute;bottom:0;left:0;width:100%;background:rgba(15,23,42,.95);backdrop-filter:blur(15px);border-top:1px solid rgba(255,255,255,.1);display:flex;justify-content:space-around;padding:10px 0 16px;z-index:100}
-.nav-item{border:none;background:transparent;color:var(--text-muted);display:flex;flex-direction:column;align-items:center;gap:3px;font-size:.68rem;font-weight:600;cursor:pointer;width:33%}
+.nav-item{border:none;background:transparent;color:var(--text-muted);display:flex;flex-direction:column;align-items:center;gap:3px;font-size:.68rem;font-weight:600;cursor:pointer;width:25%}
 .nav-item svg{width:20px;height:20px;fill:currentColor}.nav-item.active{color:#818cf8}
 .modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.7);backdrop-filter:blur(6px);display:flex;justify-content:center;align-items:flex-end;z-index:200}
 .modal-content{background:#111827;border-top-left-radius:24px;border-top-right-radius:24px;padding:20px 20px calc(20px + env(safe-area-inset-bottom,0px));width:100%;max-width:430px;max-height:88vh;overflow-y:auto;border:1px solid var(--border)}
@@ -145,6 +145,11 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
    <div class="card"><div class="card-title" style="margin-bottom:6px">Opérations du mois</div><div id="d-list"></div></div>
   </div>
 
+  <!-- ÉPARGNE -->
+  <div id="tab-epargne" class="tab hidden">
+   <div id="epargne-liste"></div>
+  </div>
+
   <!-- OPTIONS -->
   <div id="tab-options" class="tab hidden">
    <details class="card"><summary class="card-title" style="margin-bottom:0">⚙️ Paramètres du compte</summary>
@@ -153,6 +158,15 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
      <label>Solde initial (€) (point zéro absolu)<input type="text" id="p-i" placeholder="Ex : -18,44 ou 25,63" autocomplete="off"></label>
      <button class="btn-primary" onclick="saveParams()">Enregistrer les paramètres</button>
     </div>
+   </details>
+
+   <!-- LIVRETS D'ÉPARGNE -->
+   <details class="card">
+    <summary class="card-title" style="margin-bottom:0; display:flex; justify-content:space-between; align-items:center; width:100%;">
+      <span>💰 Livrets d’épargne</span>
+      <span class="badge badge-success" onclick="event.preventDefault(); event.stopPropagation(); ouvrirLivret('');">+ Ajouter livret</span>
+    </summary>
+    <div style="margin-top:10px" id="liste-livrets"></div>
    </details>
 
    <!-- RÉFÉRENCES FIXES -->
@@ -190,6 +204,7 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
  <nav class="ios-nav">
   <button class="nav-item active" id="nav-synth" onclick="T='synth';rendre()"><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 10h2v7H7zm4-3h2v10h-2zm4 6h2v4h-2z"/></svg>Synthèse</button>
   <button class="nav-item" id="nav-detail" onclick="T='detail';rendre()"><svg viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/></svg>Détail</button>
+  <button class="nav-item" id="nav-epargne" onclick="T='epargne';rendre()"><svg viewBox="0 0 24 24"><rect x="8" y="2.6" width="8" height="3.2" rx="1.2"/><rect x="5.2" y="5.4" width="13.6" height="16" rx="4"/><rect x="9.6" y="3.8" width="4.8" height="1" rx=".5" fill="#0f172a"/><text x="12" y="17.6" font-size="10.5" font-weight="800" text-anchor="middle" fill="#0f172a">€</text></svg>Épargne</button>
   <button class="nav-item" id="nav-options" onclick="gererClicOptions()"><svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c-.5.38-1.03.7-1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c-.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6-3.6z"/></svg>Options</button>
  </nav>
 </div>
@@ -236,6 +251,31 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
   <button class="btn-primary" onclick="validerReg()">Valider le règlement</button>
   <button class="btn-primary btn-ghost" onclick="annulerReg()">Annuler le règlement</button></div>
 </div></div>
+<!-- MODAL OPÉRATION LIVRET -->
+<div id="m-mvt" class="modal hidden"><div class="modal-content">
+ <div style="display:flex;justify-content:space-between;align-items:center"><h3 id="v-t" style="font-size:1.05rem">Ajouter une opération</h3><button class="del-btn" onclick="fermer('m-mvt')">✕</button></div>
+ <div class="fm">
+  <p id="v-prop" style="font-size:.88rem;font-weight:700"></p>
+  <label>Montant (€)<input type="number" step="0.01" id="v-m" placeholder="0.00"></label>
+  <label>Date<input type="date" id="v-d"></label>
+  <label>Type<select id="v-t2"><option value="1">Crédit (versement)</option><option value="-1">Débit (retrait)</option></select></label>
+  <label>Libellé (optionnel)<input id="v-l" placeholder="Ex : Épargne du mois…"></label>
+  <p class="mu" id="v-note"></p>
+  <button class="btn-primary" onclick="enregistrerMvt()">Enregistrer</button>
+ </div>
+</div></div>
+
+<!-- MODAL LIVRET -->
+<div id="m-liv" class="modal hidden"><div class="modal-content">
+ <div style="display:flex;justify-content:space-between;align-items:center"><h3 id="lv-t" style="font-size:1.05rem">Ajouter un livret</h3><button class="del-btn" onclick="fermer('m-liv')">✕</button></div>
+ <div class="fm">
+  <label>Nom du livret<input id="lv-n" placeholder="Ex : Livret A, LDDS…"></label>
+  <label>Propriétaire<select id="lv-u"></select></label>
+  <label>Solde initial (€)<input type="text" id="lv-i" placeholder="Ex : 1500 ou 1500,50" autocomplete="off"></label>
+  <button class="btn-primary" onclick="enregistrerLivret()">Sauvegarder</button>
+  <button class="btn-primary btn-ghost" id="lv-del-btn" onclick="supprimerLivret()" style="display:none;color:var(--red);margin-top:4px">Supprimer ce livret</button>
+ </div>
+</div></div>
 <div id="toast"></div>
 
 <script>
@@ -268,7 +308,9 @@ const vide = () => ({
     { id: 'e0e5c93a-8b81-432d-9481-9b6d85918ba0', nom: 'Prescillia', init: 0 }
   ],
   ops: [],
-  regles: []
+  regles: [],
+  livrets: [],
+  mvtLivrets: []
 });
 
 let S = vide(), U = '2899de9f-a408-419b-aee1-c5f26980f2b4', T = 'synth', M = '', ED = '', ET = -1, ETID = '', RM = '', ROWS = {};
@@ -277,6 +319,10 @@ let isAdmin = false;
 let titleClickCount = 0;
 let titleClickTimer = null;
 let reinitClickCount = 0;
+
+// --- Livrets d'épargne ---
+let EL = '', EV = '', LV = '';   // livret / opération / livret édité dans les fenêtres
+let OUV = {};                    // livrets dépliés dans l'onglet Épargne
 
 // --- État de synchronisation (anti-écrasement) ---
 let REV = parseInt(localStorage.getItem(LS_REV) || '0', 10) || 0;   // dernière version cloud connue
@@ -329,7 +375,7 @@ function msg(t){
    ===================================================================== */
 const clone = o => JSON.parse(JSON.stringify(o));
 const nouvelId = () => 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-const modaleOuverte = () => !$('m-op').classList.contains('hidden') || !$('m-tpl').classList.contains('hidden') || !$('m-reg').classList.contains('hidden');
+const modaleOuverte = () => !$('m-op').classList.contains('hidden') || !$('m-tpl').classList.contains('hidden') || !$('m-reg').classList.contains('hidden') || !$('m-mvt').classList.contains('hidden') || !$('m-liv').classList.contains('hidden');
 
 // Comparaison indépendante de l'ordre des clés
 const tri = v => Array.isArray(v) ? v.map(tri) : (v && typeof v === 'object') ? Object.keys(v).sort().reduce((a, k) => { a[k] = tri(v[k]); return a; }, {}) : v;
@@ -342,8 +388,12 @@ function assurerIds(d){
   d.users = Array.isArray(d.users) ? d.users : [];
   d.ops = Array.isArray(d.ops) ? d.ops : [];
   d.regles = Array.isArray(d.regles) ? d.regles : [];
+  d.livrets = Array.isArray(d.livrets) ? d.livrets : [];
+  d.mvtLivrets = Array.isArray(d.mvtLivrets) ? d.mvtLivrets : [];
   d.ops.forEach((o, i) => { if (!o.id) o.id = o.reg ? 'reg-' + o.reg + '-' + o.u : 'o' + i; });
   d.regles.forEach((g, i) => { if (!g.id) g.id = 'g' + i; });
+  d.livrets.forEach((x, i) => { if (!x.id) x.id = 'l' + i; });
+  d.mvtLivrets.forEach((x, i) => { if (!x.id) x.id = 'm' + i; });
   return d;
 }
 
@@ -413,7 +463,7 @@ function fusionnerListe(base, loc, rem){
 function fusionnerEtats(base, loc, rem){
   base = base || {};
   const out = Object.assign({}, rem);
-  ['users', 'ops', 'regles'].forEach(k => {
+  ['users', 'ops', 'regles', 'livrets', 'mvtLivrets'].forEach(k => {
     out[k] = fusionnerListe(base[k] || [], loc[k] || [], rem[k] || []);
   });
   return out;
@@ -908,7 +958,7 @@ function ligne(x, s, avecCoche = true){
   
   return `<div class="op-item ${x.d===t?'today-op':''}" style="${x.d>t?'opacity:.7':''}" onclick="${peutModifier ? (x.proj ? `ouvrirReg('${x.k}')` : `ouvrir('${id}')`) : `msg('Action non autorisée sur ce compte')`}">
    <div class="op-info">
-    <div class="op-label">${checkboxHtml}${esc(x.l)} ${x.g?'🔄':''} ${x.c?'🤝':''} ${x.proj?'👩‍❤️‍👨':''}</div>
+    <div class="op-label">${checkboxHtml}${esc(x.l)} ${x.opObj && x.opObj.mvt ? '💰' : ''} ${x.g?'🔄':''} ${x.c?'🤝':''} ${x.proj?'👩‍❤️‍👨':''}</div>
     <div class="op-sub">${fd(x.d)}${s===undefined?'':' · solde '+eur(s)}</div>
    </div>
    <div class="op-right"><div class="op-amount ${x.m<0?'red':'green'}">${x.m>0?'+':''}${eur(x.m)}</div>${del}</div>
@@ -929,10 +979,10 @@ function rendre(){
     $('seg').innerHTML = `<button class="user-btn active" style="cursor:default">${esc(activeUser.nom)}</button>`;
   }
   
-  for (const v of ['synth','detail','options']){
+  for (const v of ['synth','detail','epargne','options']){
     $('tab-'+v).classList.toggle('hidden', v !== T);$('nav-'+v).classList.toggle('active', v === T);
   }
-  synthese(t); detail();
+  synthese(t); detail(); epargne(); rendreLivretsOptions();
   
   const activeUser = usr(U);
   if (activeUser){ $('p-n').value = activeUser.nom; $('p-i').value = activeUser.init; }
@@ -1098,6 +1148,7 @@ function ouvrir(id){
   const x = ED ? ROWS[ED] : null;
 
   if (ED && !x) return msg("Cette opération n'existe plus.");
+  if (x && x.opObj && x.opObj.mvt) return msg("Opération liée à un livret : modifiez-la depuis l'onglet Épargne.");
 
   if (x && !isAdmin && !demoUserLocked && x.u !== U) {
     return msg("Vous ne pouvez éditer que vos propres opérations.");
@@ -1174,6 +1225,8 @@ function supprimer(i){
   const idx = typeof i === 'number' ? i : S.ops.findIndex(o => o.id === i);
   if (idx < 0 || !S.ops[idx]) return msg("Opération introuvable (déjà supprimée ?).");
   if (!isAdmin && !demoUserLocked && S.ops[idx].u !== U) return msg("Suppression interdite.");
+  const opSupprimee = S.ops[idx];
+  if (opSupprimee.mvt) S.mvtLivrets = S.mvtLivrets.filter(v => v.id !== opSupprimee.mvt);
   S.ops.splice(idx, 1); 
   sauver(); 
   rendre(); 
@@ -1340,13 +1393,172 @@ function importerJSON(txt){
   const regles = d.regles || [];
 
   if (Array.isArray(users) && Array.isArray(ops) && Array.isArray(regles)){
-    S = assurerIds({ users, ops, regles });
+    S = assurerIds({ users, ops, regles, livrets: d.livrets || [], mvtLivrets: d.mvtLivrets || [] });
     U = S.users[0] ? S.users[0].id : '2899de9f-a408-419b-aee1-c5f26980f2b4';
     sauver();
     rendre();
     return msg('Sauvegarde JSON restaurée et synchronisée avec succès !');
   }
   msg('Format de fichier JSON non reconnu.');
+}
+
+/* =====================================================================
+   LIVRETS D'ÉPARGNE (v2.0)
+   ===================================================================== */
+const nomUser = id => { const u = S.users.find(u => u.id === id); return u ? u.nom : '?'; };
+const peutLivret = l => isAdmin || demoUserLocked || l.u === U;
+const soldeLivret = id => {
+  const l = S.livrets.find(x => x.id === id);
+  if (!l) return 0;
+  return (l.init || 0) + somme(S.mvtLivrets.filter(v => v.liv === id));
+};
+
+function basculerLivret(id, ouvert){
+  if (ouvert) OUV[id] = 1; else delete OUV[id];
+}
+
+// Crée / met à jour l'opération miroir sur le compte du propriétaire (crédit livret = débit compte)
+function synchroniserMiroir(mv, l){
+  const libelle = 'Épargne – ' + l.nom + (mv.l ? ' (' + mv.l + ')' : '');
+  const donnees = { u: l.u, l: libelle, m: -mv.m, d: mv.d, c: false };
+  const op = S.ops.find(o => o.mvt === mv.id);
+  if (op) Object.assign(op, donnees);
+  else S.ops.push(Object.assign({ id: 'mir-' + mv.id, checked: false, mvt: mv.id }, donnees));
+}
+
+function epargne(){
+  const cont = $('epargne-liste');
+  if (!cont) return;
+  const livrets = S.livrets.slice().sort((a, b) => (a.nom || '').localeCompare(b.nom || ''));
+  cont.innerHTML = livrets.map(l => {
+    const solde = soldeLivret(l.id);
+    const peut = peutLivret(l);
+    const lignes = S.mvtLivrets.filter(v => v.liv === l.id)
+      .sort((a, b) => b.d.localeCompare(a.d) || b.m - a.m)
+      .map(v => `<div class="op-item" onclick="${peut ? `ouvrirMvt('${l.id}','${v.id}')` : `msg('Action non autorisée sur ce livret')`}">
+        <div class="op-info">
+          <div class="op-label">${esc(v.l || 'Opération')}</div>
+          <div class="op-sub">${fd(v.d)}</div>
+        </div>
+        <div class="op-right"><div class="op-amount ${v.m<0?'red':'green'}">${v.m>0?'+':''}${eur(v.m)}</div>${peut ? `<button class="del-btn" onclick="event.stopPropagation();supprimerMvt('${v.id}')">✕</button>` : ''}</div>
+      </div>`).join('');
+    return `<details class="card" ${OUV[l.id] ? 'open' : ''} ontoggle="basculerLivret('${l.id}', this.open)">
+      <summary class="card-title" style="margin-bottom:0"><span>💰 ${esc(l.nom)} <span class="mu" style="text-transform:none;letter-spacing:0">· ${esc(nomUser(l.u))}</span></span><span class="${solde<0?'red':'green'}" style="font-size:.95rem;font-weight:800;text-transform:none;letter-spacing:0">${eur(solde)}</span></summary>
+      <div style="margin-top:10px">
+        ${peut ? `<button class="btn-primary btn-ghost" onclick="ouvrirMvt('${l.id}')">+ Ajouter opération</button>` : ''}
+        ${lignes || '<p class="mu" style="text-align:center">Aucune opération</p>'}
+      </div>
+    </details>`;
+  }).join('') || '<p class="mu" style="text-align:center">Aucun livret. Ajoutez-en un dans Options.</p>';
+}
+
+function rendreLivretsOptions(){
+  const cont = $('liste-livrets');
+  if (!cont) return;
+  const livrets = S.livrets.slice().sort((a, b) => (a.nom || '').localeCompare(b.nom || ''));
+  cont.innerHTML = livrets.map(l => `<div class="op-item" onclick="ouvrirLivret('${l.id}')">
+      <div class="op-info">
+        <div class="op-label">${esc(l.nom)}</div>
+        <div class="op-sub">Le livret est à : ${esc(nomUser(l.u))} · solde initial</div>
+      </div>
+      <div class="op-right"><div class="op-amount ${(l.init || 0) < 0 ? 'red' : 'green'}">${eur(l.init || 0)}</div></div>
+    </div>`).join('') || '<p class="mu" style="text-align:center">Aucun livret.</p>';
+}
+
+function ouvrirLivret(id){
+  LV = id || '';
+  const l = LV ? S.livrets.find(x => x.id === LV) : null;
+  if (LV && !l) return msg("Livret introuvable.");
+  if (l && !peutLivret(l)) return msg("Vous ne pouvez pas modifier ce livret.");
+  const admin = isAdmin || demoUserLocked;
+  $('lv-t').textContent = l ? 'Modifier le livret' : 'Ajouter un livret';
+  $('lv-u').innerHTML = S.users.map(u => `<option value="${u.id}">${esc(u.nom)}</option>`).join('');
+  $('lv-u').value = l ? l.u : U;
+  $('lv-u').disabled = !admin;
+  $('lv-n').value = l ? l.nom : '';
+  $('lv-i').value = l ? String(l.init || 0).replace('.', ',') : '';
+  $('lv-del-btn').style.display = l ? 'block' : 'none';
+  ouvrirM('m-liv');
+}
+
+function enregistrerLivret(){
+  const nom = $('lv-n').value.trim();
+  const init = parseFloat(($('lv-i').value || '0').replace(',', '.')) || 0;
+  const admin = isAdmin || demoUserLocked;
+  const u = admin ? $('lv-u').value : U;
+  if (!nom) return msg('Veuillez saisir un nom de livret.');
+
+  if (!LV) {
+    S.livrets.push({ id: nouvelId(), nom, u, init });
+  } else {
+    const l = S.livrets.find(x => x.id === LV);
+    if (!l) return msg("Ce livret n'existe plus (supprimé entre-temps).");
+    if (!peutLivret(l)) return msg("Modification interdite.");
+    l.nom = nom; l.u = u; l.init = init;
+    // propriétaire ou nom modifié : on met à jour les opérations et leurs reports sur le compte
+    S.mvtLivrets.filter(v => v.liv === l.id).forEach(v => { v.u = l.u; synchroniserMiroir(v, l); });
+  }
+  sauver(); fermer('m-liv'); rendre();
+}
+
+function supprimerLivret(){
+  if (!LV) return;
+  const l = S.livrets.find(x => x.id === LV);
+  if (!l) return msg("Ce livret n'existe plus.");
+  if (!peutLivret(l)) return msg("Suppression interdite.");
+  if (confirm("Supprimer ce livret et toutes ses opérations ? Les opérations déjà reportées sur le compte seront conservées.")) {
+    const ids = new Set(S.mvtLivrets.filter(v => v.liv === l.id).map(v => v.id));
+    S.ops.forEach(o => { if (o.mvt && ids.has(o.mvt)) delete o.mvt; });
+    S.mvtLivrets = S.mvtLivrets.filter(v => v.liv !== l.id);
+    S.livrets = S.livrets.filter(x => x.id !== l.id);
+    sauver(); fermer('m-liv'); rendre();
+  }
+}
+
+function ouvrirMvt(livId, mvtId){
+  const l = S.livrets.find(x => x.id === livId);
+  if (!l) return msg("Livret introuvable.");
+  if (!peutLivret(l)) return msg("Action non autorisée sur ce livret.");
+  const v = mvtId ? S.mvtLivrets.find(x => x.id === mvtId) : null;
+  if (mvtId && !v) return msg("Opération introuvable.");
+  EL = livId; EV = mvtId || '';
+  $('v-t').textContent = v ? "Modifier l'opération" : 'Ajouter une opération';
+  $('v-prop').textContent = 'Le livret est à : ' + nomUser(l.u);
+  $('v-m').value = v ? Math.abs(v.m) : '';
+  $('v-d').value = v ? v.d : today();
+  $('v-t2').value = v && v.m < 0 ? '-1' : '1';
+  $('v-l').value = v ? (v.l || '') : '';
+  $('v-note').textContent = 'Reportée automatiquement sur le compte de ' + nomUser(l.u) + '.';
+  ouvrirM('m-mvt');
+}
+
+function enregistrerMvt(){
+  const l = S.livrets.find(x => x.id === EL);
+  if (!l) return msg("Ce livret n'existe plus (supprimé entre-temps).");
+  if (!peutLivret(l)) return msg("Modification interdite.");
+  const v = Math.abs(parseFloat($('v-m').value)), d = $('v-d').value, sg = +$('v-t2').value, lib = $('v-l').value.trim();
+  if (isNaN(v) || !d) return msg('Champs requis.');
+
+  let mv = EV ? S.mvtLivrets.find(x => x.id === EV) : null;
+  if (EV && !mv) return msg("Cette opération n'existe plus (supprimée entre-temps).");
+  if (mv) {
+    mv.l = lib; mv.m = sg * v; mv.d = d;
+  } else {
+    mv = { id: nouvelId(), liv: l.id, u: l.u, d, l: lib, m: sg * v };
+    S.mvtLivrets.push(mv);
+  }
+  synchroniserMiroir(mv, l);
+  sauver(); fermer('m-mvt'); rendre();
+}
+
+function supprimerMvt(id){
+  const mv = S.mvtLivrets.find(x => x.id === id);
+  if (!mv) return msg("Opération introuvable.");
+  const l = S.livrets.find(x => x.id === mv.liv);
+  if (l && !peutLivret(l)) return msg("Suppression interdite.");
+  S.mvtLivrets = S.mvtLivrets.filter(x => x.id !== id);
+  S.ops = S.ops.filter(o => o.mvt !== id);
+  sauver(); rendre();
 }
 
 function gererClicOptions(){ T = 'options'; rendre(); }
