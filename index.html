@@ -254,6 +254,8 @@ const SB_KEY = 'sb_publishable_x3D526hO0y-6584s5Z26ZQ_E8hrDFRj';
 const SHARED_KEY = 'shared_budget';
 const supabaseClient = window.supabase.createClient(SB_URL, SB_KEY);
 
+const genererId = () => '_' + Math.random().toString(36).substr(2, 9);
+
 const vide = () => ({
   users: [
     { id: '2899de9f-a408-419b-aee1-c5f26980f2b4', nom: 'Kévin', init: 0 },
@@ -396,7 +398,6 @@ async function gererSuccesSession(session) {
     return;
   }
   
-  // Chargement cloud immédiat puis rendu forcé direct
   await chargerCloud(false);
 }
 
@@ -466,6 +467,7 @@ async function chargerCloud(silencieux = false){
     return;
   }
   
+  // Sécurité anti-écrasement si une modale est ouverte
   const modalOuverte = !$('m-op').classList.contains('hidden') || !$('m-tpl').classList.contains('hidden') || !$('m-reg').classList.contains('hidden');
   if (modalOuverte && silencieux) return;
 
@@ -574,8 +576,9 @@ function brut(uid, hingga, seulementNonCoche = false){
   const r = [];
   
   S.ops.filter(o => o.u === uid && o.d <= hingga).forEach(o => {
+    if (!o.id) o.id = genererId(); // Rétrocompatibilité ID
     if (!seulementNonCoche || !o.checked) {
-      r.push({u: o.u, d: o.d, l: o.l, m: o.m, c: o.c, checked: !!o.checked, opObj: o});
+      r.push({u: o.u, d: o.d, l: o.l, m: o.m, c: o.c, checked: !!o.checked, opObj: o, id: o.id});
     }
   });
 
@@ -584,6 +587,7 @@ function brut(uid, hingga, seulementNonCoche = false){
   const dateLimiteFinale = hingga > maxHorizonIso ? hingga : maxHorizonIso;
 
   for (const g of S.regles.filter(g => g.u === uid)){
+    if (!g.id) g.id = genererId(); // Rétrocompatibilité ID
     let debStr = g.debut;
     if (!debStr) debStr = '2026-01';
     if (debStr.length === 7) debStr = debStr + '-01';
@@ -609,7 +613,7 @@ function brut(uid, hingga, seulementNonCoche = false){
       if (seulementNonCoche && isChecked) continue;
 
       if (dd <= hingga) {
-        r.push({u: uid, d: dd, l: ll, m: mm, c: cc, checked: isChecked, g, k});
+        r.push({u: uid, d: dd, l: ll, m: mm, c: cc, checked: isChecked, g, k, ruleId: g.id});
       }
     }
   }
@@ -662,7 +666,11 @@ function mini(uid, ym){
   return r;
 }
 
-const cle = x => { const i = S.ops.indexOf(x.opObj || x); return i >= 0 ? 'o'+i : 'r'+S.regles.indexOf(x.g)+'|'+x.k; };
+const cle = x => { 
+  if (x.opObj && x.opObj.id) return 'op_' + x.opObj.id;
+  const i = S.ops.indexOf(x.opObj || x); 
+  return i >= 0 ? 'o'+i : 'r'+S.regles.indexOf(x.g)+'|'+x.k; 
+};
 
 function toggleCheck(id, event) {
   event.stopPropagation();
@@ -672,7 +680,7 @@ function toggleCheck(id, event) {
     msg("Vous ne pouvez modifier que vos propres opérations.");
     return;
   }
-  const opReal = x.opObj || S.ops.find(o => S.ops.indexOf(o) === +id.slice(1));
+  const opReal = x.opObj || S.ops.find(o => o.id === x.id || S.ops.indexOf(o) === +id.slice(1));
   
   if (opReal) {
     opReal.checked = !opReal.checked;
@@ -687,7 +695,7 @@ function toggleCheck(id, event) {
 
 function ligne(x, s, avecCoche = true){
   const t = today(), id = x.proj ? 'p'+x.k : cle(x); ROWS[id] = x;
-  const opReal = x.opObj || S.ops.find(o => S.ops.indexOf(o) === +id.slice(1));
+  const opReal = x.opObj || S.ops.find(o => o.id === x.id || S.ops.indexOf(o) === +id.slice(1));
   const i = opReal ? S.ops.indexOf(opReal) : -1;
   
   const peutModifier = isAdmin || demoUserLocked || x.u === U;
@@ -788,6 +796,7 @@ function detail(){
     .sort((a, b) => (a.g.jour || 1) - (b.g.jour || 1));
 
   $('regles').innerHTML = reglesTriable.map(({ g, origIndex }) => {
+    if (!g.id) g.id = genererId();
     const mClass = g.m < 0 ? 'red' : 'green';
     const datesInfo = g.fin ? ` (Fin: ${formaterDateFr(g.fin)})` : '';
 
@@ -915,7 +924,7 @@ function enregistrer(){
     const x = ROWS[ED];
     if (!isAdmin && !demoUserLocked && x.u !== U) return msg("Modification interdite.");
     
-    const opReal = x.opObj || S.ops.find(o => S.ops.indexOf(o) === +ED.slice(1));
+    const opReal = x.opObj || S.ops.find(o => o.id === x.id || S.ops.indexOf(o) === +ED.slice(1));
     if (opReal) {
       opReal.l = l;
       opReal.m = sg * v;
@@ -936,6 +945,7 @@ function enregistrer(){
       const jourDuMois = parseInt(d.slice(8)) || 1;
       const moisDebut = d.slice(0,7);
       S.regles.push({
+        id: genererId(),
         u: U,
         l,
         m: sg * v,
@@ -947,7 +957,15 @@ function enregistrer(){
         exc: {}
       });
     } else {
-      S.ops.push({u: U, l, m: sg * v, d, c, checked: false});
+      S.ops.push({
+        id: genererId(),
+        u: U,
+        l,
+        m: sg * v,
+        d,
+        c,
+        checked: false
+      });
     }
   }
   sauver(); fermer('m-op'); rendre();
@@ -1013,7 +1031,7 @@ function enregistrerTpl(){
 
   if (!l || isNaN(mVal)) return msg('Veuillez remplir le libellé et le montant.');
 
-  const newData = { u: U, l, m: sg * mVal, jour, debut, fin: fin || undefined, c, checked: false, exc: {} };
+  const newData = { id: (ET !== -1 && S.regles[ET] && S.regles[ET].id) ? S.regles[ET].id : genererId(), u: U, l, m: sg * mVal, jour, debut, fin: fin || undefined, c, checked: false, exc: {} };
 
   if (ET === -1) {
     S.regles.push(newData);
@@ -1056,8 +1074,8 @@ function validerReg(){
   S.ops = S.ops.filter(o => o.reg !== RM);
   if (Math.abs(c.e) >= .005){
     const [du, cr] = c.e > 0 ? [1, 0] : [0, 1], a = Math.abs(c.e);
-    S.ops.push({u:S.users[du].id, l:'Règlement charges', m:-a, d, c:false, checked:false, reg:RM});
-    S.ops.push({u:S.users[cr].id, l:'Règlement charges', m:a, d, c:false, checked:false, reg:RM});
+    S.ops.push({id: genererId(), u:S.users[du].id, l:'Règlement charges', m:-a, d, c:false, checked:false, reg:RM});
+    S.ops.push({id: genererId(), u:S.users[cr].id, l:'Règlement charges', m:a, d, c:false, checked:false, reg:RM});
   }
   sauver(); fermer('m-reg'); rendre();
 }
