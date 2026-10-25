@@ -70,8 +70,6 @@ main{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column
 .op-right{display:flex;align-items:center;gap:8px}
 .op-amount{font-weight:700;font-size:.9rem;white-space:nowrap}
 .del-btn{color:var(--text-muted);font-size:.85rem;border:none;background:rgba(255,255,255,.06);width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
-.att-btn{opacity:.35;font-size:.8rem}
-.att-btn.on{opacity:1;background:rgba(245,158,11,.25);border:1px solid rgba(245,158,11,.6)}
 nav.ios-nav{position:absolute;bottom:0;left:0;width:100%;background:rgba(15,23,42,.95);backdrop-filter:blur(15px);border-top:1px solid rgba(255,255,255,.1);display:flex;justify-content:space-around;padding:10px 0 16px;z-index:100}
 .nav-item{border:none;background:transparent;color:var(--text-muted);display:flex;flex-direction:column;align-items:center;gap:3px;font-size:.68rem;font-weight:600;cursor:pointer;width:25%}
 .nav-item svg{width:20px;height:20px;fill:currentColor}.nav-item.active{color:#818cf8}
@@ -162,15 +160,6 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
     </div>
    </details>
 
-   <!-- LIVRETS D'ÉPARGNE -->
-   <details class="card">
-    <summary class="card-title" style="margin-bottom:0; display:flex; justify-content:space-between; align-items:center; width:100%;">
-      <span>💰 Livrets d’épargne</span>
-      <span class="badge badge-success" onclick="event.preventDefault(); event.stopPropagation(); ouvrirLivret('');">+ Ajouter livret</span>
-    </summary>
-    <div style="margin-top:10px" id="liste-livrets"></div>
-   </details>
-
    <!-- RÉFÉRENCES FIXES -->
    <details class="card">
     <summary class="card-title" style="margin-bottom:0; display:flex; justify-content:space-between; align-items:center; width:100%;">
@@ -178,6 +167,24 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
       <span class="badge badge-success" onclick="event.preventDefault(); event.stopPropagation(); ouvrirTpl(-1);">+ Ajouter modèle</span>
     </summary>
     <div style="margin-top:10px" id="regles"></div>
+   </details>
+
+   <!-- OPÉRATIONS EN ATTENTE -->
+   <details class="card">
+    <summary class="card-title" style="margin-bottom:0; display:flex; justify-content:space-between; align-items:center; width:100%;">
+      <span>⏳ Opérations en attente</span>
+      <span class="badge badge-warning" id="nb-attente">0</span>
+    </summary>
+    <div style="margin-top:10px" id="liste-attente"></div>
+   </details>
+
+   <!-- LIVRETS D'ÉPARGNE -->
+   <details class="card">
+    <summary class="card-title" style="margin-bottom:0; display:flex; justify-content:space-between; align-items:center; width:100%;">
+      <span>💰 Livrets d’épargne</span>
+      <span class="badge badge-success" onclick="event.preventDefault(); event.stopPropagation(); ouvrirLivret('');">+ Ajouter livret</span>
+    </summary>
+    <div style="margin-top:10px" id="liste-livrets"></div>
    </details>
 
    <details class="card"><summary class="card-title" style="margin-bottom:0">☁️ Données Cloud / Sauvegarde</summary>
@@ -201,7 +208,6 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
    <details class="card">
     <summary class="card-title" style="margin-bottom:0">🛠️ Options Développeur</summary>
     <div class="fm" style="margin-top:12px">
-     <button class="btn-primary btn-ghost" style="color:var(--warning);background:rgba(245,158,11,0.15);margin-bottom:8px" onclick="reinitialiserCoches()">🔄 Tout décocher (Réinitialiser les coches)</button>
      <button class="btn-primary btn-ghost" id="btn-reinit-app" style="color:var(--red);background:rgba(244,63,94,0.15);margin-bottom:0" onclick="reinitialiserApplication()">🗑️ Réinitialiser l'application (10 clics requis)</button>
     </div>
    </details>
@@ -764,22 +770,6 @@ function reinitialiserApplication() {
   location.reload();
 }
 
-function reinitialiserCoches() {
-  if (confirm("Voulez-vous décocher toutes les opérations ?")) {
-    S.ops.forEach(o => o.checked = false);
-    S.regles.forEach(g => {
-      if (g.exc) {
-        Object.keys(g.exc).forEach(k => {
-          if (g.exc[k]) g.exc[k].checked = false;
-        });
-      }
-    });
-    sauver();
-    rendre();
-    msg("Toutes les opérations ont été décochées.");
-  }
-}
-
 async function chargerCloud(silencieux = false){
   if (!navigator.onLine) {
     if (!silencieux) rendre();
@@ -956,23 +946,45 @@ function toggleCheck(id, event) {
   rendre();
 }
 
-// Bascule "en attente" : exclut l'opération du Mini et du solde glissant tant qu'elle est active
-function toggleAtt(id, event) {
+// Opérations en attente (cochées) : liste dans Options, la croix valide l'opération (= décoche)
+function rendreAttente(){
+  const cont = $('liste-attente');
+  if (!cont) return;
+  const now = new Date();
+  const horizon = iso(new Date(now.getFullYear(), now.getMonth() + 12, 31));
+  const liste = brut(U, horizon, false)
+    .filter(x => x.checked)
+    .sort((a, b) => a.d.localeCompare(b.d) || b.m - a.m);
+  $('nb-attente').textContent = liste.length;
+  cont.innerHTML = liste.map(x => {
+    const id = cle(x); ROWS[id] = x;
+    return `<div class="op-item" style="cursor:default">
+      <div class="op-info">
+        <div class="op-label">${esc(x.l)} ${x.g?'🔄':''} ${x.c?'🤝':''}</div>
+        <div class="op-sub">${fd(x.d)}</div>
+      </div>
+      <div class="op-right">
+        <div class="op-amount ${x.m<0?'red':'green'}">${x.m>0?'+':''}${eur(x.m)}</div>
+        <button class="del-btn" title="Valider l'opération" onclick="validerAttente('${id}', event)">✕</button>
+      </div>
+    </div>`;
+  }).join('') || '<p class="mu" style="text-align:center">Aucune opération en attente.</p>';
+}
+
+function validerAttente(id, event){
   event.stopPropagation();
   const x = ROWS[id];
-  if (!x || x.proj) return;
+  if (!x) return;
   if (!isAdmin && !demoUserLocked && x.u !== U) {
     msg("Vous ne pouvez modifier que vos propres opérations.");
     return;
   }
-  const opReal = x.opObj;
-  
-  if (opReal) {
-    opReal.att = !opReal.att;
+  if (x.opObj) {
+    x.opObj.checked = false;
   } else if (x.g) {
     x.g.exc = x.g.exc || {};
     x.g.exc[x.k] = x.g.exc[x.k] || {};
-    x.g.exc[x.k].att = !x.att;
+    x.g.exc[x.k].checked = false;
   }
   sauver();
   rendre();
@@ -1012,7 +1024,7 @@ function rendre(){
   for (const v of ['synth','detail','epargne','options']){
     $('tab-'+v).classList.toggle('hidden', v !== T);$('nav-'+v).classList.toggle('active', v === T);
   }
-  synthese(t); detail(); epargne(); rendreLivretsOptions();
+  synthese(t); detail(); epargne(); rendreLivretsOptions(); rendreAttente();
   
   const activeUser = usr(U);
   if (activeUser){ $('p-n').value = activeUser.nom; $('p-i').value = activeUser.init; }
