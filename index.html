@@ -911,12 +911,9 @@ const soldeActuelBanque = (uid, date) => usr(uid).init + somme(mouvementsBanque(
 const soldeTheoriqueActuel = (uid, date) => usr(uid).init + somme(mouvementsTheoriques(uid, date));
 const soldeTheoriqueFinMois = (uid, date) => usr(uid).init + somme(mouvementsTheoriques(uid, date));
 
-// Opération passée ou du jour, non cochée : "en attente" (hors Mini et solde glissant)
-const enAttente = x => !x.proj && !x.checked && x.d <= today();
-
 function mini(uid, ym){
   const [y, m] = ym.split('-').map(Number), deb = iso(new Date(y, m-1, 1)), fin = new Date(y, m, 0);
-  const mv = mouvementsTheoriques(uid, iso(fin)).filter(x => !enAttente(x));
+  const mv = mouvementsTheoriques(uid, iso(fin));
   let s = usr(uid).init + somme(mv.filter(x => x.d < deb)), r = {s, d:deb};
   for (let j = new Date(y, m-1, 1); j <= fin; j.setDate(j.getDate()+1)){
     const dateJour = iso(j);
@@ -1039,12 +1036,12 @@ function synthese(t){
 
 function detail(){
   $('mois').value = M;
-  const tous = mouvementsTheoriques(U, M+'-31'), avant = usr(U).init + somme(tous.filter(x => x.d < M+'-01' && !enAttente(x)));
+  const tous = mouvementsTheoriques(U, M+'-31'), avant = usr(U).init + somme(tous.filter(x => x.d < M+'-01'));
   let s = avant;
   
   const lignes = tous.filter(x => x.d.startsWith(M))
     .sort((a, b) => a.d.localeCompare(b.d) || b.m - a.m)
-    .map(x => { if (!enAttente(x)) s += x.m; return {x, s}; });
+    .map(x => { s += x.m; return {x, s}; });
     
   const ok = o => (o.x.m < 0 ? F.deb : F.cre) && (o.x.g ? F.men : F.pon) && (F.com || !o.x.c);
   $('detailEq').classList.toggle('hidden', !F.eq); $('detailEqText').textContent = commun(M).txt;
