@@ -254,7 +254,11 @@ const SB_KEY = 'sb_publishable_x3D526hO0y-6584s5Z26ZQ_E8hrDFRj';
 const SHARED_KEY = 'shared_budget';
 const supabaseClient = window.supabase.createClient(SB_URL, SB_KEY);
 
-const genererId = () => '_' + Math.random().toString(36).substr(2, 9);
+// Clés de stockage local (sauvegarde, copie de référence, version cloud, modifications non envoyées)
+const LS_LOCAL = 'mon_budget_local_data';
+const LS_BASE  = 'mon_budget_base';
+const LS_REV   = 'mon_budget_rev';
+const LS_DIRTY = 'mon_budget_dirty';
 
 const vide = () => ({
   users: [
@@ -265,12 +269,21 @@ const vide = () => ({
   regles: []
 });
 
-let S = vide(), U = '2899de9f-a408-419b-aee1-c5f26980f2b4', T = 'synth', M = '', ED = '', ET = -1, RM = '', ROWS = {};
+let S = vide(), U = '2899de9f-a408-419b-aee1-c5f26980f2b4', T = 'synth', M = '', ED = '', ET = -1, ETID = '', RM = '', ROWS = {};
 const F = {deb:1, cre:1, men:1, pon:1, com:1, roll:1, eq:0};
 let isAdmin = false;
 let titleClickCount = 0;
 let titleClickTimer = null;
 let reinitClickCount = 0;
+
+// --- État de synchronisation (anti-écrasement) ---
+let REV = parseInt(localStorage.getItem(LS_REV) || '0', 10) || 0;   // dernière version cloud connue
+let BASE = null;                                                      // dernier état cloud connu (copie de référence)
+try { const b = localStorage.getItem(LS_BASE); if (b) BASE = JSON.parse(b); } catch(e) { BASE = null; }
+let DIRTY = localStorage.getItem(LS_DIRTY) === '1';                  // modifications locales pas encore envoyées
+let SYNC_P = null;                                                    // synchronisation en cours (promesse)
+let RESYNC = false;                                                   // une nouvelle passe est demandée
+let LOADED = false;                                                   // sauvegarde locale déjà chargée
 
 let demoUserLocked = localStorage.getItem('demo_locked') === 'true';
 if (demoUserLocked) {
@@ -308,6 +321,237 @@ function msg(t){
   clearTimeout(msg.h);
   msg.h = setTimeout(() => e.style.display = 'none', 4500);
 }
+
+/* =====================================================================
+   OUTILS DE SYNCHRONISATION ANTI-ÉCRASEMENT
+   ===================================================================== */
+const clone = o => JSON.parse(JSON.stringify(o));
+const nouvelId = () => 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const modaleOuverte = () => !$('m-op').classList.contains('hidden') || !$('m-tpl').classList.contains('hidden') || !$('m-reg').classList.contains('hidden');
+
+// Comparaison indépendante de l'ordre des clés
+const tri = v => Array.isArray(v) ? v.map(tri) : (v && typeof v === 'object') ? Object.keys(v).sort().reduce((a, k) => { a[k] = tri(v[k]); return a; }, {}) : v;
+const eg = (a, b) => JSON.stringify(tri(a)) === JSON.stringify(tri(b));
+const estObj = v => v && typeof v === 'object' && !Array.isArray(v);
+
+// Donne un identifiant unique à chaque opération / référence (ids "anciens" déterministes)
+function assurerIds(d){
+  if (!d || typeof d !== 'object') return d;
+  d.users = Array.isArray(d.users) ? d.users : [];
+  d.ops = Array.isArray(d.ops) ? d.ops : [];
+  d.regles = Array.isArray(d.regles) ? d.regles : [];
+  d.ops.forEach((o, i) => { if (!o.id) o.id = o.reg ? 'reg-' + o.reg + '-' + o.u : 'o' + i; });
+  d.regles.forEach((g, i) => { if (!g.id) g.id = 'g' + i; });
+  return d;
+}
+
+function marquerSale(v){
+  DIRTY = v;
+  if (v) localStorage.setItem(LS_DIRTY, '1'); else localStorage.removeItem(LS_DIRTY);
+}
+
+function persisterBase(){
+  try {
+    localStorage.setItem(LS_BASE, JSON.stringify(BASE));
+    localStorage.setItem(LS_REV, String(REV));
+  } catch(e) {}
+}
+
+// Fusion à 3 voies : base (dernier état commun), loc (mon état), rem (état du cloud)
+function fusionnerValeur(base, loc, rem){
+  if (eg(loc, rem)) return loc;
+  if (eg(loc, base)) return rem;
+  if (eg(rem, base)) return loc;
+  if (estObj(loc) && estObj(rem)) {
+    const b = estObj(base) ? base : {};
+    const out = {};
+    const cles = new Set([...Object.keys(loc), ...Object.keys(rem), ...Object.keys(b)]);
+    cles.forEach(k => {
+      const inL = k in loc, inR = k in rem, inB = k in b;
+      if (inL && inR) {
+        out[k] = fusionnerValeur(b[k], loc[k], rem[k]);
+      } else if (inL) {
+        // absent côté cloud : supprimé là-bas si je ne l'ai pas modifié
+        if (inB && eg(b[k], loc[k])) return;
+        out[k] = loc[k];
+      } else if (inR) {
+        // absent chez moi : supprimé ici si le cloud ne l'a pas modifié
+        if (inB && eg(b[k], rem[k])) return;
+        out[k] = rem[k];
+      }
+    });
+    return out;
+  }
+  return loc; // même champ modifié des 2 côtés : ma version gagne
+}
+
+function fusionnerListe(base, loc, rem){
+  const mb = new Map(base.map(x => [x.id, x]));
+  const ml = new Map(loc.map(x => [x.id, x]));
+  const mr = new Map(rem.map(x => [x.id, x]));
+  const ids = [];
+  rem.forEach(x => ids.push(x.id));
+  loc.forEach(x => { if (!mr.has(x.id)) ids.push(x.id); });
+  const out = [];
+  ids.forEach(id => {
+    const b = mb.get(id), l = ml.get(id), r = mr.get(id), inB = mb.has(id);
+    if (l && r) {
+      out.push(fusionnerValeur(b, l, r));
+    } else if (l) {
+      if (inB && eg(b, l)) return;   // supprimé dans le cloud, inchangé chez moi
+      out.push(l);                   // nouveau chez moi, ou modifié par moi
+    } else if (r) {
+      if (inB && eg(b, r)) return;   // supprimé chez moi, inchangé dans le cloud
+      out.push(r);                   // nouveau dans le cloud, ou modifié par l'autre
+    }
+  });
+  return out;
+}
+
+function fusionnerEtats(base, loc, rem){
+  base = base || {};
+  const out = Object.assign({}, rem);
+  ['users', 'ops', 'regles'].forEach(k => {
+    out[k] = fusionnerListe(base[k] || [], loc[k] || [], rem[k] || []);
+  });
+  return out;
+}
+
+// Requête réseau avec délai maximum
+async function fetchT(url, opts = {}, ms = 15000){
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ms);
+  try {
+    return await fetch(url, Object.assign({}, opts, { signal: ctl.signal }));
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+async function lireCloud(token){
+  const res = await fetchT(`${SB_URL}/rest/v1/app_data?user_id=eq.${SHARED_KEY}`, {
+    headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${token}` }
+  });
+  if (!res.ok) throw new Error('lecture cloud ' + res.status);
+  const data = await res.json();
+  const existe = !!(data && data.length > 0);
+  if (existe && data[0].payload) {
+    const p = data[0].payload;
+    const rev = typeof p._rev === 'number' ? p._rev : 0;
+    const etat = assurerIds(clone(p));
+    delete etat._rev;
+    return { existe, rev, etat };
+  }
+  return { existe, rev: 0, etat: null };
+}
+
+// Écriture conditionnelle : n'est acceptée que si la version cloud n'a pas bougé
+async function ecrireCloud(token, etat, revAttendue, existe){
+  const entetes = {
+    'apikey': SB_KEY,
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json',
+    'Prefer': 'return=representation'
+  };
+  const payload = Object.assign({}, etat, { _rev: revAttendue + 1 });
+  if (existe) {
+    const filtre = revAttendue === 0 ? 'payload-%3E%3E_rev=is.null' : `payload-%3E%3E_rev=eq.${revAttendue}`;
+    const res = await fetchT(`${SB_URL}/rest/v1/app_data?user_id=eq.${SHARED_KEY}&${filtre}`, {
+      method: 'PATCH', headers: entetes, body: JSON.stringify({ payload })
+    });
+    if (!res.ok) return 'erreur';
+    const lignes = await res.json();
+    return (Array.isArray(lignes) && lignes.length > 0) ? 'ok' : 'conflit';
+  }
+  const res = await fetchT(`${SB_URL}/rest/v1/app_data`, {
+    method: 'POST', headers: entetes, body: JSON.stringify({ user_id: SHARED_KEY, payload })
+  });
+  if (res.ok) return 'ok';
+  if (res.status === 409) return 'conflit';
+  return 'erreur';
+}
+
+// Une passe de synchronisation : lit le cloud, fusionne, écrit si besoin
+async function passeSynchro(){
+  if (!navigator.onLine) return false;
+  try {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session) return false;
+    const token = session.access_token;
+
+    for (let essai = 0; essai < 6; essai++) {
+      const cloud = await lireCloud(token);
+      const rem = cloud.etat;
+      assurerIds(S);
+
+      // Rien à envoyer : on adopte simplement l'état du cloud
+      if (!DIRTY) {
+        if (rem) {
+          const change = !eg(S, rem);
+          if (change) {
+            S = rem;
+            localStorage.setItem(LS_LOCAL, JSON.stringify(S));
+          }
+          if (change || cloud.rev !== REV || !BASE) {
+            BASE = clone(rem);
+            REV = cloud.rev;
+            persisterBase();
+          }
+        }
+        return true;
+      }
+
+      // Modifications locales à envoyer : fusion avec le cloud puis écriture conditionnelle
+      const loc = clone(S);
+      const aEnvoyer = rem ? fusionnerEtats(BASE || {}, loc, rem) : loc;
+      const r = await ecrireCloud(token, aEnvoyer, cloud.rev, cloud.existe);
+      if (r === 'conflit') continue;       // quelqu'un a écrit entre-temps : on relit et on refusionne
+      if (r !== 'ok') return false;
+
+      REV = cloud.rev + 1;
+      BASE = clone(aEnvoyer);
+      persisterBase();
+
+      if (eg(S, loc)) {
+        S = aEnvoyer;
+        marquerSale(false);
+      } else {
+        // l'utilisateur a modifié pendant l'envoi : on garde ses nouveautés et on renverra
+        S = fusionnerEtats(loc, S, aEnvoyer);
+        RESYNC = true;
+      }
+      localStorage.setItem(LS_LOCAL, JSON.stringify(S));
+      return true;
+    }
+    return false;
+  } catch(e) {
+    console.error('Erreur synchro cloud', e);
+    return false;
+  }
+}
+
+async function synchroniserInterne(){
+  let ok = await passeSynchro();
+  let garde = 0;
+  while (RESYNC && garde < 5) {
+    RESYNC = false;
+    garde++;
+    ok = await passeSynchro();
+  }
+  RESYNC = false;
+  return ok;
+}
+
+function synchroniser(){
+  if (SYNC_P) { RESYNC = true; return SYNC_P; }
+  SYNC_P = (async () => {
+    try { return await synchroniserInterne(); }
+    finally { SYNC_P = null; }
+  })();
+  return SYNC_P;
+}
+
+/* ===================================================================== */
 
 function gererClicTitreDemo() {
   if (!isAdmin) return;
@@ -349,8 +593,13 @@ function verifierConnexionReelle() {
 window.addEventListener('online', async () => {
   verifierConnexionReelle();
   if (navigator.onLine) {
-    await sauverCloudForce();
-    msg("Connexion rétablie : vos modifications ont été synchronisées.");
+    const ok = await sauverCloudForce();
+    if (ok) {
+      if (!modaleOuverte()) rendre();
+      msg("Connexion rétablie : vos modifications ont été synchronisées.");
+    } else {
+      msg("⚠️ Connexion rétablie, mais la synchronisation a échoué. Nouvel essai automatique.");
+    }
   }
 });
 
@@ -359,9 +608,20 @@ window.addEventListener('offline', () => {
 });
 
 async function verifierSession() {
-  const localBackup = localStorage.getItem('mon_budget_local_data');
-  if (localBackup) { 
-    try { S = JSON.parse(localBackup); } catch(e){} 
+  // La sauvegarde locale n'est chargée qu'une seule fois (sinon elle écraserait l'état en mémoire)
+  if (!LOADED) {
+    LOADED = true;
+    const localBackup = localStorage.getItem(LS_LOCAL);
+    if (localBackup) { 
+      try {
+        S = assurerIds(JSON.parse(localBackup));
+        if (!S.users.length) S.users = vide().users;
+      } catch(e){
+        marquerSale(false);
+      }
+    } else {
+      marquerSale(false);
+    }
   }
   
   try {
@@ -398,6 +658,7 @@ async function gererSuccesSession(session) {
     return;
   }
   
+  // Chargement cloud immédiat puis rendu forcé direct
   await chargerCloud(false);
 }
 
@@ -467,31 +728,17 @@ async function chargerCloud(silencieux = false){
     return;
   }
   
-  // Sécurité anti-écrasement si une modale est ouverte
-  const modalOuverte = !$('m-op').classList.contains('hidden') || !$('m-tpl').classList.contains('hidden') || !$('m-reg').classList.contains('hidden');
-  if (modalOuverte && silencieux) return;
+  // Fenêtre ouverte : on ne touche pas aux données (évite de modifier la mauvaise ligne)
+  if (modaleOuverte()) {
+    if (!silencieux) rendre();
+    return;
+  }
+  if (silencieux && SYNC_P) return;
 
   try {
     const { data: { session } } = await supabaseClient.auth.getSession();
     if (!session) return;
-    const token = session.access_token;
-
-    const res = await fetch(`${SB_URL}/rest/v1/app_data?user_id=eq.${SHARED_KEY}`, {
-      headers: { 
-        'apikey': SB_KEY, 
-        'Authorization': `Bearer ${token}` 
-      }
-    });
-    if (res.ok){
-      const data = await res.json();
-      if (data && data.length > 0 && data[0].payload){
-        const remoteData = data[0].payload;
-        if (JSON.stringify(remoteData) !== JSON.stringify(S)){
-          S = remoteData;
-          localStorage.setItem('mon_budget_local_data', JSON.stringify(S));
-        }
-      }
-    }
+    await synchroniser();
   } catch(e){ 
     console.error('Erreur chargement cloud', e); 
   }
@@ -504,11 +751,13 @@ async function chargerCloud(silencieux = false){
 }
 
 async function sauver(){
-  localStorage.setItem('mon_budget_local_data', JSON.stringify(S));
+  localStorage.setItem(LS_LOCAL, JSON.stringify(S));
+  marquerSale(true);
   if (navigator.onLine) {
     const succes = await sauverCloudForce();
     if (succes) {
       msg("Enregistré et synchronisé avec succès.");
+      if (!modaleOuverte()) rendre();
     } else {
       msg("⚠️ Enregistrement local OK, mais échec de la synchronisation cloud.");
     }
@@ -518,48 +767,7 @@ async function sauver(){
 }
 
 async function sauverCloudForce(){
-  try {
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if (!session) return false;
-    const token = session.access_token;
-
-    const checkRes = await fetch(`${SB_URL}/rest/v1/app_data?user_id=eq.${SHARED_KEY}`, {
-      headers: { 
-        'apikey': SB_KEY, 
-        'Authorization': `Bearer ${token}` 
-      }
-    });
-    const existing = await checkRes.json();
-
-    let res;
-    if (existing && existing.length > 0) {
-      res = await fetch(`${SB_URL}/rest/v1/app_data?user_id=eq.${SHARED_KEY}`, {
-        method: 'PATCH',
-        headers: { 
-          'apikey': SB_KEY, 
-          'Authorization': `Bearer ${token}`, 
-          'Content-Type': 'application/json', 
-          'Prefer': 'return=minimal' 
-        },
-        body: JSON.stringify({ payload: S })
-      });
-    } else {
-      res = await fetch(`${SB_URL}/rest/v1/app_data`, {
-        method: 'POST',
-        headers: { 
-          'apikey': SB_KEY, 
-          'Authorization': `Bearer ${token}`, 
-          'Content-Type': 'application/json', 
-          'Prefer': 'return=minimal' 
-        },
-        body: JSON.stringify({ user_id: SHARED_KEY, payload: S })
-      });
-    }
-    return res.ok;
-  } catch(e){ 
-    console.error('Erreur sauvegarde cloud', e);
-    return false;
-  }
+  return await synchroniser();
 }
 
 setInterval(() => {
@@ -576,9 +784,8 @@ function brut(uid, hingga, seulementNonCoche = false){
   const r = [];
   
   S.ops.filter(o => o.u === uid && o.d <= hingga).forEach(o => {
-    if (!o.id) o.id = genererId(); // Rétrocompatibilité ID
     if (!seulementNonCoche || !o.checked) {
-      r.push({u: o.u, d: o.d, l: o.l, m: o.m, c: o.c, checked: !!o.checked, opObj: o, id: o.id});
+      r.push({u: o.u, d: o.d, l: o.l, m: o.m, c: o.c, checked: !!o.checked, opObj: o});
     }
   });
 
@@ -587,7 +794,6 @@ function brut(uid, hingga, seulementNonCoche = false){
   const dateLimiteFinale = hingga > maxHorizonIso ? hingga : maxHorizonIso;
 
   for (const g of S.regles.filter(g => g.u === uid)){
-    if (!g.id) g.id = genererId(); // Rétrocompatibilité ID
     let debStr = g.debut;
     if (!debStr) debStr = '2026-01';
     if (debStr.length === 7) debStr = debStr + '-01';
@@ -613,7 +819,7 @@ function brut(uid, hingga, seulementNonCoche = false){
       if (seulementNonCoche && isChecked) continue;
 
       if (dd <= hingga) {
-        r.push({u: uid, d: dd, l: ll, m: mm, c: cc, checked: isChecked, g, k, ruleId: g.id});
+        r.push({u: uid, d: dd, l: ll, m: mm, c: cc, checked: isChecked, g, k});
       }
     }
   }
@@ -666,11 +872,8 @@ function mini(uid, ym){
   return r;
 }
 
-const cle = x => { 
-  if (x.opObj && x.opObj.id) return 'op_' + x.opObj.id;
-  const i = S.ops.indexOf(x.opObj || x); 
-  return i >= 0 ? 'o'+i : 'r'+S.regles.indexOf(x.g)+'|'+x.k; 
-};
+// Clé de ligne basée sur l'identifiant unique (et non plus sur la position dans la liste)
+const cle = x => x.opObj ? 'o' + x.opObj.id : 'r' + x.g.id + '|' + x.k;
 
 function toggleCheck(id, event) {
   event.stopPropagation();
@@ -680,7 +883,7 @@ function toggleCheck(id, event) {
     msg("Vous ne pouvez modifier que vos propres opérations.");
     return;
   }
-  const opReal = x.opObj || S.ops.find(o => o.id === x.id || S.ops.indexOf(o) === +id.slice(1));
+  const opReal = x.opObj;
   
   if (opReal) {
     opReal.checked = !opReal.checked;
@@ -695,11 +898,10 @@ function toggleCheck(id, event) {
 
 function ligne(x, s, avecCoche = true){
   const t = today(), id = x.proj ? 'p'+x.k : cle(x); ROWS[id] = x;
-  const opReal = x.opObj || S.ops.find(o => o.id === x.id || S.ops.indexOf(o) === +id.slice(1));
-  const i = opReal ? S.ops.indexOf(opReal) : -1;
+  const opReal = x.opObj;
   
   const peutModifier = isAdmin || demoUserLocked || x.u === U;
-  const del = (x.proj || !peutModifier) ? '' : `<button class="del-btn" onclick="event.stopPropagation();${i>=0?`supprimer(${i})`:`retirer('${id}')`}">✕</button>`;
+  const del = (x.proj || !peutModifier) ? '' : `<button class="del-btn" onclick="event.stopPropagation();${opReal?`supprimer('${opReal.id}')`:`retirer('${id}')`}">✕</button>`;
   const checkboxHtml = (!avecCoche || x.proj) ? '' : `<input type="checkbox" ${x.checked ? 'checked' : ''} ${!peutModifier ? 'disabled' : ''} onclick="toggleCheck('${id}', event)" style="margin-right:8px; cursor:${peutModifier?'pointer':'default'};" title="Décompte solde banque">`;
   
   return `<div class="op-item ${x.d===t?'today-op':''}" style="${x.d>t?'opacity:.7':''}" onclick="${peutModifier ? (x.proj ? `ouvrirReg('${x.k}')` : `ouvrir('${id}')`) : `msg('Action non autorisée sur ce compte')`}">
@@ -796,7 +998,6 @@ function detail(){
     .sort((a, b) => (a.g.jour || 1) - (b.g.jour || 1));
 
   $('regles').innerHTML = reglesTriable.map(({ g, origIndex }) => {
-    if (!g.id) g.id = genererId();
     const mClass = g.m < 0 ? 'red' : 'green';
     const datesInfo = g.fin ? ` (Fin: ${formaterDateFr(g.fin)})` : '';
 
@@ -894,6 +1095,8 @@ function ouvrir(id){
   ED = id || ''; 
   const x = ED ? ROWS[ED] : null;
 
+  if (ED && !x) return msg("Cette opération n'existe plus.");
+
   if (x && !isAdmin && !demoUserLocked && x.u !== U) {
     return msg("Vous ne pouvez éditer que vos propres opérations.");
   }
@@ -922,9 +1125,10 @@ function enregistrer(){
   
   if (ED) {
     const x = ROWS[ED];
+    if (!x) return msg("Cette opération n'existe plus (supprimée entre-temps).");
     if (!isAdmin && !demoUserLocked && x.u !== U) return msg("Modification interdite.");
     
-    const opReal = x.opObj || S.ops.find(o => o.id === x.id || S.ops.indexOf(o) === +ED.slice(1));
+    const opReal = x.opObj;
     if (opReal) {
       opReal.l = l;
       opReal.m = sg * v;
@@ -945,7 +1149,7 @@ function enregistrer(){
       const jourDuMois = parseInt(d.slice(8)) || 1;
       const moisDebut = d.slice(0,7);
       S.regles.push({
-        id: genererId(),
+        id: nouvelId(),
         u: U,
         l,
         m: sg * v,
@@ -957,41 +1161,44 @@ function enregistrer(){
         exc: {}
       });
     } else {
-      S.ops.push({
-        id: genererId(),
-        u: U,
-        l,
-        m: sg * v,
-        d,
-        c,
-        checked: false
-      });
+      S.ops.push({id: nouvelId(), u: U, l, m: sg * v, d, c, checked: false});
     }
   }
   sauver(); fermer('m-op'); rendre();
 }
 
+// Accepte soit un identifiant (texte), soit une position (nombre) pour rester compatible
 function supprimer(i){ 
-  if (!isAdmin && !demoUserLocked && S.ops[i] && S.ops[i].u !== U) return msg("Suppression interdite.");
-  S.ops.splice(i, 1); 
+  const idx = typeof i === 'number' ? i : S.ops.findIndex(o => o.id === i);
+  if (idx < 0 || !S.ops[idx]) return msg("Opération introuvable (déjà supprimée ?).");
+  if (!isAdmin && !demoUserLocked && S.ops[idx].u !== U) return msg("Suppression interdite.");
+  S.ops.splice(idx, 1); 
   sauver(); 
   rendre(); 
 }
 
 function retirer(id){
-  const [rIdx, k] = [ +id.slice(1).split('|')[0], id.slice(1).split('|')[1] ];
+  const corps = id.slice(1), sep = corps.indexOf('|');
+  const rId = corps.slice(0, sep), k = corps.slice(sep + 1);
+  const rIdx = S.regles.findIndex(g => g.id === rId);
+  if (rIdx < 0) return msg("Référence introuvable.");
   if (!isAdmin && !demoUserLocked && S.regles[rIdx] && S.regles[rIdx].u !== U) return msg("Action interdite.");
   S.regles[rIdx].exc = S.regles[rIdx].exc || {};
   S.regles[rIdx].exc[k] = { skip: true };
   sauver(); rendre();
 }
 
+// Position actuelle de la référence ouverte dans la fenêtre (retrouvée par son identifiant)
+const etIdx = () => ET === -1 ? -1 : S.regles.findIndex(g => g.id === ETID);
+
 function ouvrirTpl(idx){
   ET = idx;
   const isNew = idx === -1;
+  if (!isNew && !S.regles[idx]) return msg("Référence introuvable.");
   if (!isNew && !isAdmin && !demoUserLocked && S.regles[idx] && S.regles[idx].u !== U) {
     return msg("Vous ne pouvez pas modifier cette référence.");
   }
+  ETID = isNew ? '' : S.regles[idx].id;
 
   $('t-t').textContent = isNew ? 'Ajouter une référence fixe' : 'Modifier la référence fixe';
   
@@ -1031,14 +1238,18 @@ function enregistrerTpl(){
 
   if (!l || isNaN(mVal)) return msg('Veuillez remplir le libellé et le montant.');
 
-  const newData = { id: (ET !== -1 && S.regles[ET] && S.regles[ET].id) ? S.regles[ET].id : genererId(), u: U, l, m: sg * mVal, jour, debut, fin: fin || undefined, c, checked: false, exc: {} };
+  const newData = { u: U, l, m: sg * mVal, jour, debut, fin: fin || undefined, c, checked: false, exc: {} };
 
   if (ET === -1) {
+    newData.id = nouvelId();
     S.regles.push(newData);
   } else {
-    if (!isAdmin && !demoUserLocked && S.regles[ET] && S.regles[ET].u !== U) return msg("Modification interdite.");
-    newData.exc = S.regles[ET].exc || {};
-    S.regles[ET] = newData;
+    const ei = etIdx();
+    if (ei < 0) return msg("Cette référence n'existe plus (supprimée entre-temps).");
+    if (!isAdmin && !demoUserLocked && S.regles[ei] && S.regles[ei].u !== U) return msg("Modification interdite.");
+    newData.id = S.regles[ei].id;
+    newData.exc = S.regles[ei].exc || {};
+    S.regles[ei] = newData;
   }
   sauver();
   fermer('m-tpl');
@@ -1048,14 +1259,18 @@ function enregistrerTpl(){
 
 function rafraichirRecurrencesTpl(){
   if (ET === -1) return;
-  mettreAJourRecurrencesFutures(ET);
+  const ei = etIdx();
+  if (ei < 0) return msg("Cette référence n'existe plus (supprimée entre-temps).");
+  mettreAJourRecurrencesFutures(ei);
 }
 
 function supprimerTpl(){
   if (ET === -1) return;
-  if (!isAdmin && !demoUserLocked && S.regles[ET] && S.regles[ET].u !== U) return msg("Suppression interdite.");
+  const ei = etIdx();
+  if (ei < 0) return msg("Cette référence n'existe plus (supprimée entre-temps).");
+  if (!isAdmin && !demoUserLocked && S.regles[ei] && S.regles[ei].u !== U) return msg("Suppression interdite.");
   if (confirm("Voulez-vous vraiment supprimer cette référence fixe ?")) {
-    S.regles.splice(ET, 1);
+    S.regles.splice(ei, 1);
     sauver();
     fermer('m-tpl');
     rendre();
@@ -1074,8 +1289,9 @@ function validerReg(){
   S.ops = S.ops.filter(o => o.reg !== RM);
   if (Math.abs(c.e) >= .005){
     const [du, cr] = c.e > 0 ? [1, 0] : [0, 1], a = Math.abs(c.e);
-    S.ops.push({id: genererId(), u:S.users[du].id, l:'Règlement charges', m:-a, d, c:false, checked:false, reg:RM});
-    S.ops.push({id: genererId(), u:S.users[cr].id, l:'Règlement charges', m:a, d, c:false, checked:false, reg:RM});
+    // Identifiants fixes : si les 2 utilisateurs valident en même temps, pas de doublon
+    S.ops.push({id:'reg-'+RM+'-'+S.users[du].id, u:S.users[du].id, l:'Règlement charges', m:-a, d, c:false, checked:false, reg:RM});
+    S.ops.push({id:'reg-'+RM+'-'+S.users[cr].id, u:S.users[cr].id, l:'Règlement charges', m:a, d, c:false, checked:false, reg:RM});
   }
   sauver(); fermer('m-reg'); rendre();
 }
@@ -1122,7 +1338,7 @@ function importerJSON(txt){
   const regles = d.regles || [];
 
   if (Array.isArray(users) && Array.isArray(ops) && Array.isArray(regles)){
-    S = { users, ops, regles };
+    S = assurerIds({ users, ops, regles });
     U = S.users[0] ? S.users[0].id : '2899de9f-a408-419b-aee1-c5f26980f2b4';
     sauver();
     rendre();
