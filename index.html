@@ -270,7 +270,6 @@ let titleClickCount = 0;
 let titleClickTimer = null;
 let reinitClickCount = 0;
 
-// Récupération de l'état du mode démo depuis localStorage pour survivre aux refreshs
 let demoUserLocked = localStorage.getItem('demo_locked') === 'true';
 if (demoUserLocked) {
   const savedUser = localStorage.getItem('demo_user_id');
@@ -380,7 +379,7 @@ function verifierSessionLocale() {
   $('auth-screen').classList.remove('hidden');
 }
 
-function gererSuccesSession(session) {
+async function gererSuccesSession(session) {
   $('auth-screen').classList.add('hidden');
   const email = (session.user.email || '').toLowerCase().trim();
   
@@ -389,14 +388,16 @@ function gererSuccesSession(session) {
     if (!demoUserLocked) {
       U = '2899de9f-a408-419b-aee1-c5f26980f2b4';
     }
-    chargerCloud();
   } else if (email === 'prescillia@budget.local') {
     isAdmin = false;
     U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
-    chargerCloud();
   } else {
     seDeconnecter();
+    return;
   }
+  
+  // Chargement cloud immédiat puis rendu forcé direct
+  await chargerCloud(false);
 }
 
 async function seConnecter() {
@@ -460,10 +461,13 @@ function reinitialiserCoches() {
 }
 
 async function chargerCloud(silencieux = false){
-  if (!navigator.onLine) return;
+  if (!navigator.onLine) {
+    if (!silencieux) rendre();
+    return;
+  }
   
   const modalOuverte = !$('m-op').classList.contains('hidden') || !$('m-tpl').classList.contains('hidden') || !$('m-reg').classList.contains('hidden');
-  if (modalOuverte) return;
+  if (modalOuverte && silencieux) return;
 
   try {
     const { data: { session } } = await supabaseClient.auth.getSession();
@@ -483,9 +487,6 @@ async function chargerCloud(silencieux = false){
         if (JSON.stringify(remoteData) !== JSON.stringify(S)){
           S = remoteData;
           localStorage.setItem('mon_budget_local_data', JSON.stringify(S));
-          if (!silencieux) {
-            rendre();
-          }
         }
       }
     }
@@ -496,6 +497,8 @@ async function chargerCloud(silencieux = false){
   if (!isAdmin && !demoUserLocked) {
     U = 'e0e5c93a-8b81-432d-9481-9b6d85918ba0';
   }
+  
+  rendre();
 }
 
 async function sauver(){
@@ -703,7 +706,6 @@ function ligne(x, s, avecCoche = true){
 function rendre(){
   ROWS = {}; const t = today(); if (!M) M = t.slice(0,7);
   
-  // Si mode démo actif : affichage d'un seul bouton simple avec le nom du user (sans mention "bloqué")
   if (demoUserLocked) {
     const activeUser = usr(U);
     $('seg').innerHTML = `<button class="user-btn active" style="cursor:default">${esc(activeUser.nom)}</button>`;
