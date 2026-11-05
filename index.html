@@ -140,6 +140,7 @@ summary{font-weight:600;cursor:pointer;color:var(--text);font-size:.85rem;outlin
      <summary class="card-title" style="margin-bottom:0">🔍 Filtres d’affichage</summary>
      <div id="filtres" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"></div>
     </details>
+    <button class="btn-primary" onclick="ouvrir()">+ Nouvelle opération</button>
    </div>
    <div id="detailEq" class="card hidden" style="padding:10px 14px"><div class="card-title" style="margin-bottom:4px">Équilibre des charges (mois)</div><div id="detailEqText" style="font-size:.82rem;font-weight:600"></div></div>
    <div class="card"><div class="card-title" style="margin-bottom:6px">Opérations du mois</div><div id="d-list"></div></div>
@@ -906,11 +907,13 @@ const soldeTheoriqueActuel = (uid, date) => usr(uid).init + somme(mouvementsTheo
 const soldeTheoriqueFinMois = (uid, date) => usr(uid).init + somme(mouvementsTheoriques(uid, date));
 
 function mini(uid, ym){
-  const [y, m] = ym.split('-').map(Number), deb = iso(new Date(y, m-1, 1)), fin = new Date(y, m, 0);
+  const [y, m] = ym.split('-').map(Number), fin = new Date(y, m, 0);
+  // Mois en cours : le Mini est calculé à partir d'aujourd'hui ; autres mois : à partir du 1er
+  const deb = ym === today().slice(0,7) ? today() : iso(new Date(y, m-1, 1));
   // Les opérations cochées (= en attente) sont ignorées pour le Mini
   const mv = mouvementsTheoriques(uid, iso(fin)).filter(x => !x.checked);
   let s = usr(uid).init + somme(mv.filter(x => x.d < deb)), r = {s, d:deb};
-  for (let j = new Date(y, m-1, 1); j <= fin; j.setDate(j.getDate()+1)){
+  for (let j = new Date(y, m-1, parseInt(deb.slice(8), 10)); j <= fin; j.setDate(j.getDate()+1)){
     const dateJour = iso(j);
     const opsDuJour = mv.filter(x => x.d === dateJour);
     opsDuJour.sort((a, b) => b.m - a.m);
